@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Fonts ─────────────────────────────────────────── */
+/* DM Sans loaded from index.html */
+
+/* ── Design tokens ─────────────────────────────────── */
+:root {
+  --bg:           #0d1117;
+  --bg-2:         #161b22;
+  --surface:      #1c2230;
+  --surface-2:    #222b3a;
+  --surface-3:    #2a3448;
+  --border:       rgba(255,255,255,0.08);
+  --border-2:     rgba(255,255,255,0.14);
+
+  --ink:          #e6edf3;
+  --ink-2:        #adbac7;
+  --muted:        #768390;
+  --subtle:       #545d68;
+
+  --accent:       #58a6ff;
+  --accent-2:     #388bfd;
+  --accent-dim:   rgba(88,166,255,0.12);
+
+  --success:      #3fb950;
+  --success-dim:  rgba(63,185,80,0.12);
+  --danger:       #f85149;
+  --danger-dim:   rgba(248,81,73,0.12);
+  --warning:      #d29922;
+  --warning-dim:  rgba(210,153,34,0.12);
+  --blue:         #79c0ff;
+  --blue-dim:     rgba(121,192,255,0.12);
+
+  --radius:       10px;
+  --radius-lg:    16px;
+  --radius-xl:    20px;
+}
+
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Typography helpers ────────────────────────────── */
+.display  { font-family: 'Space Grotesk', 'DM Sans', system-ui, sans-serif; letter-spacing: -0.025em; }
+.mono     { font-family: 'JetBrains Mono', 'Fira Code', Menlo, monospace; }
+.tabular  { font-variant-numeric: tabular-nums; }
+
+/* ── Form primitives ───────────────────────────────── */
+input, textarea, select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input::placeholder, textarea::placeholder { color: var(--subtle); }
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px rgba(56,139,253,0.15);
+}
+select { cursor: pointer; }
+textarea { resize: vertical; }
+
+/* ── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+
+/* ── Utilities ─────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.card-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}

@@ -1,0 +1,12 @@
+{
+  "name": "notch-relayer",
+  "version": "1.0.0",
+  "description": "Gemini-powered arbitrator relayer for Notch disputes",
+  "scripts": {
+    "dev": "bun run --watch --env-file=../.env --env-file=.env server.ts",
+    "start": "bun run --env-file=../.env --env-file=.env server.ts"
+  },
+  "dependencies": {
+    "viem": "*"
+  }
+}

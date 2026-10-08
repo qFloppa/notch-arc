@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+artifacts/
+viewer/node_modules/
+viewer/.next/
+.env*
+# ...but the template is meant to be committed. Without this negation the
+# `.env*` glob above swallows it silently.
+!.env.example
+
+# local scratch, never committed
+.superpowers/
+.remember/
+.claude/settings.local.json
+
+.vercel

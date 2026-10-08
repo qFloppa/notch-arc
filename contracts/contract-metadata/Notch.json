@@ -1,0 +1,1639 @@
+{
+  "contractAddress": "0xeffe19557a9cac8bf25ef6d3f072481d46a0938a",
+  "network": "ARC-TESTNET",
+  "deployerWalletId": "3c2464b2-8369-52e2-a782-800bbeca5396",
+  "contract_code_path": "/home/user/app/contracts/Notch.sol",
+  "contract_compiled_code_path": "/home/user/app/contracts/out/Notch.sol/Notch.json",
+  "contract_network_and_links": {
+    "Arc Testnet": "https://explorer.testnet.arc.io/address/0xeffe19557a9cac8bf25ef6d3f072481d46a0938a"
+  },
+  "contract_deployments": [
+    {
+      "chain": "Arc Testnet",
+      "address": "0xeffe19557a9cac8bf25ef6d3f072481d46a0938a",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0xeffe19557a9cac8bf25ef6d3f072481d46a0938a",
+      "txHash": "0x8bae1fa6ebfd974f88c9fa3887054684f9ddceb1a27d80f77359212c3ca78e7b",
+      "deployedAt": "2026-10-07T18:42:21.223Z"
+    },
+    {
+      "chain": "Arc Testnet",
+      "address": "0x8d92ea139ff2dfe8bae6635412fc0fed60ae9c03",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x8d92ea139ff2dfe8bae6635412fc0fed60ae9c03",
+      "txHash": "0x4f1633a32116a397ff85a02cef7cc6ca6c900ccf88225ba0faf0b145629019e0",
+      "deployedAt": "2026-10-06T16:42:37.076Z"
+    },
+    {
+      "chain": "Arc Testnet",
+      "address": "0x7c7cc8322ba3db93381823a9161e47a85d490fc8",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x7c7cc8322ba3db93381823a9161e47a85d490fc8",
+      "txHash": "0x1a97c67ca0682b1b610ff371eaab2f68c85368b3aca140e591590fd5e818a4c4",
+      "deployedAt": "2026-10-06T15:17:36.487Z"
+    }
+  ],
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_usdc",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_arbitrator",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_initialOwner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_bondAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_disputeWindowSeconds",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "MAX_ITEMS_PER_CYCLE",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "acceptStatement",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "arbitrator",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "bondAmount",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "closeCycle",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "credits",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "disputeByStatementAndItem",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "disputeWindowSeconds",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "disputes",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "claimant",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "claimKind",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "claim",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "bondAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "status",
+          "type": "uint8",
+          "internalType": "enum Notch.DisputeStatus"
+        },
+        {
+          "name": "outcome",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "revisedItemAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "claimantBondAward",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "rationale",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "evidenceHashMatched",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "openedAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "resolvedAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "bondCredited",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getCredit",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getDispute",
+      "inputs": [
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Notch.Dispute",
+          "components": [
+            {
+              "name": "disputeId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "statementId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "itemId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "claimant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "claimKind",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "claim",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "bondAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "status",
+              "type": "uint8",
+              "internalType": "enum Notch.DisputeStatus"
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "revisedItemAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "claimantBondAward",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "evidenceHashMatched",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "openedAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "resolvedAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "bondCredited",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getItem",
+      "inputs": [
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Notch.LineItem",
+          "components": [
+            {
+              "name": "itemId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "tabId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "payer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "payee",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "memo",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "evidenceUri",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "evidenceHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "cycle",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "createdAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getStatement",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Notch.Statement",
+          "components": [
+            {
+              "name": "statementId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "tabId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "cycle",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "closedAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "closedBy",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "statementHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "status",
+              "type": "uint8",
+              "internalType": "enum Notch.StatementStatus"
+            },
+            {
+              "name": "netAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "itemIds",
+              "type": "bytes32[]",
+              "internalType": "bytes32[]"
+            },
+            {
+              "name": "acceptedBy",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "acceptedAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getStatementItemIds",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTab",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Notch.Tab",
+          "components": [
+            {
+              "name": "tabId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "creator",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "payer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "payee",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "cycleSeconds",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "currentCycle",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "openedAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "active",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "memberList",
+              "type": "address[]",
+              "internalType": "address[]"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTabCycleItemIds",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "cycle",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTabStatementIds",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "lineItems",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "payer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "memo",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "evidenceUri",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "evidenceHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "cycle",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "createdAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "openDispute",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "claimKind",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "claim",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "openTab",
+      "inputs": [
+        {
+          "name": "payer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "cycleSeconds",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "recordCharge",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "memo",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "evidenceUri",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "evidenceHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "renounceOwnership",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setArbitrator",
+      "inputs": [
+        {
+          "name": "newArbitrator",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setBondAmount",
+      "inputs": [
+        {
+          "name": "newBond",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setDisputeWindow",
+      "inputs": [
+        {
+          "name": "newWindow",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "settleStatement",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "statementDisputeCount",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "statementResolvedDisputeCount",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "statements",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "cycle",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "closedAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "closedBy",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "statementHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "status",
+          "type": "uint8",
+          "internalType": "enum Notch.StatementStatus"
+        },
+        {
+          "name": "netAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "acceptedBy",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "acceptedAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "submitRuling",
+      "inputs": [
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "outcome",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "revisedItemAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "claimantBondAward",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "evidenceHashMatched",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "rationale",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "tabs",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "creator",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "payer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "cycleSeconds",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "currentCycle",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "openedAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "transferOwnership",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "usdc",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IERC20"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "withdraw",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "ArbitratorChanged",
+      "inputs": [
+        {
+          "name": "oldArbitrator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newArbitrator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BondCredited",
+      "inputs": [
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ChargeRecorded",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "cycle",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "payer",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "evidenceHash",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "CycleClosed",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "cycle",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "statementHash",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "netAmount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "closedBy",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "DisputeOpened",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "itemId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "claimant",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "bondAmount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "claimKind",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OwnershipTransferred",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RulingSubmitted",
+      "inputs": [
+        {
+          "name": "disputeId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "outcome",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "revisedItemAmount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "claimantBondAward",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "evidenceHashMatched",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "StatementAccepted",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "acceptedBy",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "acceptedAt",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "StatementSettled",
+      "inputs": [
+        {
+          "name": "statementId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "netAmount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "payer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TabOpened",
+      "inputs": [
+        {
+          "name": "tabId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "creator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "payer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "cycleSeconds",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "Withdrawn",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AdjustedAmountTooLarge",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CycleItemCapReached",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CycleTooEarly",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DisputeWindowExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DuplicateDispute",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InsufficientCredit",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidOutcome",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ItemNotInTab",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotArbitrator",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotPayee",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotPayer",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotSettleable",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotTabMember",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "OwnableInvalidOwner",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OwnableUnauthorizedAccount",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ReentrancyGuardReentrantCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SafeERC20FailedOperation",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "StatementNotOpen",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "TabNotActive",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAddress",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAmount",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroBond",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroWindow",
+      "inputs": []
+    }
+  ]
+}
