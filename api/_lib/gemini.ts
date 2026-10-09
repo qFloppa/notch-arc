@@ -62,26 +62,40 @@ Dispute Details:
 
 Return a JSON ruling.`
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiApiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ parts: [{ text: userMessage }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-          // Gemini 3.x are thinking models and thinking tokens count against
-          // maxOutputTokens — with a small budget the JSON gets truncated mid-key.
-          // This is a short structured classification, so skip thinking entirely.
-          thinkingConfig: { thinkingBudget: 0 },
-          maxOutputTokens: 2048,
-        },
-      }),
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    contents: [{ parts: [{ text: userMessage }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.1,
+      // Gemini 3.x are thinking models and thinking tokens count against
+      // maxOutputTokens — with a small budget the JSON gets truncated mid-key.
+      // This is a short structured classification, so skip thinking entirely.
+      thinkingConfig: { thinkingBudget: 0 },
+      maxOutputTokens: 2048,
+    },
+  })
+
+  // 503 (model overloaded) and 500 are transient — Gemini recommends an immediate
+  // retry. Retry in-call so one dispute POST still returns the real ruling instead of
+  // failing and leaving the frontend to re-push minutes later. ponytail: fixed 4
+  // attempts / ~7s total; good enough, raise the schedule if overloads get longer.
+  const RETRY_DELAYS_MS = [1000, 2000, 4000]
+  let response: Response
+  let attempt = 0
+  for (;;) {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiApiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+    )
+    if (response.ok) break
+    if ((response.status === 503 || response.status === 500) && attempt < RETRY_DELAYS_MS.length) {
+      await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[attempt]))
+      attempt++
+      continue
     }
-  )
+    break
+  }
 
   if (!response.ok) {
     const errText = await response.text()
