@@ -1,9 +1,11 @@
 /**
  * Notch dispute arbitrator relayer — local dev server.
  *
- * Thin HTTP wrapper around relayer/arbitrate.ts. Production runs the same module as a
- * Vercel Function (api/relayer/*); this exists so `bun run dev` in relayer/ gives you
- * the identical behaviour behind the Vite /relayer proxy.
+ * Thin HTTP wrapper around the shared arbitration module (api/_lib/arbitrate.ts).
+ * Production runs that same module as a Vercel Function (api/relayer/*); this exists so
+ * `bun run dev` in relayer/ gives you the identical behaviour behind the Vite /relayer
+ * proxy. The shared code lives under api/_lib — not here — because Vercel treats relayer/
+ * as a separate package (own package.json) and won't bundle imports that cross into it.
  *
  * Discovery is push-only: the frontend POSTs { disputeId } here, both right after a
  * DisputeOpened tx confirms and on every tab load for any dispute still Open. The
@@ -11,7 +13,7 @@
  * the same whether this process just restarted or is a cold serverless instance.
  */
 
-import { processDispute, health, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from './arbitrate.js'
+import { processDispute, health, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from '../api/_lib/arbitrate.js'
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
