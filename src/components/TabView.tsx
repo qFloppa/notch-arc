@@ -11,6 +11,7 @@ import {
   formatUsdc,
   formatAddress,
   formatTimestamp,
+  pushDispute,
 } from '../notch-contract'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import RecordChargeForm from './RecordChargeForm'
@@ -118,16 +119,6 @@ export default function TabView({ tabId, onBack }: Props) {
     void Promise.all(
       ids.map(id => client.readContract({ ...NOTCH_CONTRACT, functionName: 'getStatement', args: [id] }))
     ).then(results => { if (!cancelled) setStmtList(results as StatementData[]) })
-    // Re-register every statement with the relayer on load, not just at close time —
-    // the relayer keeps its manifest in memory, so a restart (or being offline when a
-    // cycle closed) would otherwise leave pending disputes undiscoverable forever.
-    for (const id of ids) {
-      void fetch('/relayer/register-statement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statementId: id }),
-      }).catch(() => {/* relayer offline — ok */})
-    }
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, statementIdsKey])
@@ -155,6 +146,9 @@ export default function TabView({ tabId, onBack }: Props) {
                 ...NOTCH_CONTRACT, functionName: 'getDispute', args: [disputeId],
               }) as DisputeData
               entries[stmt.statementId] = dispute
+              // The relayer holds no state between requests, so this is what guarantees a
+              // dispute gets arbitrated even if the push at filing time never landed.
+              if (dispute.status === 0) pushDispute(disputeId)
             } catch { /* no dispute for this item */ }
           })
         )

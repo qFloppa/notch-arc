@@ -142,7 +142,7 @@ export default function RulingAdmin({ tabIds: _ }: Props) {
         </div>
         <div className="p-5 space-y-4">
           {[
-            { step: '1', label: 'Copy env', code: 'cd relayer && cp .env.example .env' },
+            { step: '1', label: 'Copy env', code: 'cd relayer && cp env.example .env' },
             { step: '2', label: 'Fill secrets', code: 'GEMINI_API_KEY=… ARBITRATOR_PRIVATE_KEY=…' },
             { step: '3', label: 'Install & run', code: 'bun install && bun run dev' },
           ].map(({ step, label, code }) => (

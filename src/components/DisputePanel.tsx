@@ -9,6 +9,7 @@ import {
   CLAIM_KINDS,
   BOND_AMOUNT,
   formatUsdc,
+  pushDispute,
 } from '../notch-contract'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 
@@ -81,12 +82,7 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
       }
     }
     if (disputeId) {
-      console.log('[notch] Pushing disputeId to relayer:', disputeId)
-      fetch('/relayer/dispute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ disputeId }),
-      }).then(r => r.json()).then(d => console.log('[notch] Relayer response:', d)).catch(e => console.warn('[notch] Relayer push failed:', e))
+      pushDispute(disputeId)
     } else {
       console.warn('[notch] Could not parse disputeId from receipt logs', disputeReceipt.logs)
     }
