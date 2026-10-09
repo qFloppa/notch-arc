@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Gemini-powered arbitrator relayer for Notch disputes",
   "scripts": {
-    "dev": "bun run --watch --env-file=../.env --env-file=.env server.ts",
-    "start": "bun run --env-file=../.env --env-file=.env server.ts"
+    "dev": "bun run --watch server.ts",
+    "start": "bun run server.ts"
   },
   "dependencies": {
     "viem": "*"

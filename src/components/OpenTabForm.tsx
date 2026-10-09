@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseAbiItem, decodeEventLog } from 'viem'
+
 import { toast } from 'sonner'
 import { NOTCH_CONTRACT, ARC_TESTNET_CHAIN_ID } from '../notch-contract'
 import { buildTxExplorerUrl } from '@/onchain-facts'
@@ -22,9 +22,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
-const TAB_OPENED_ABI = parseAbiItem(
-  'event TabOpened(bytes32 indexed tabId, address indexed creator, address indexed payer, address payee, uint256 cycleSeconds)'
-)
 
 export default function OpenTabForm({ onCreated }: Props) {
   const { address, chainId } = useAccount()
@@ -39,19 +36,17 @@ export default function OpenTabForm({ onCreated }: Props) {
   // Parse tabId from receipt logs and store it — runs after confirmation
   useEffect(() => {
     if (!isSuccess || !receipt || !address) return
-    try {
-      for (const log of receipt.logs) {
-        try {
-          const decoded = decodeEventLog({ abi: [TAB_OPENED_ABI], data: log.data, topics: log.topics })
-          if (decoded.eventName === 'TabOpened' && decoded.args.tabId) {
-            addStoredTabId(address, decoded.args.tabId)
-          }
-        } catch {
-          // not a TabOpened log — skip
-        }
+    const CONTRACT_ADDR = NOTCH_CONTRACT.address.toLowerCase()
+    for (const log of receipt.logs) {
+      // Only look at logs from our contract
+      if (log.address.toLowerCase() !== CONTRACT_ADDR) continue
+      // TabOpened: topics[0]=eventSig, topics[1]=tabId, topics[2]=creator, topics[3]=payer
+      if (log.topics.length >= 2 && log.topics[1]) {
+        const tabId = log.topics[1]
+        addStoredTabId(address, tabId)
+        console.log('[notch] TabOpened — tabId stored:', tabId)
+        break
       }
-    } catch {
-      // receipt parsing failed — tab will still be on-chain, just not auto-listed
     }
     toast.success('Tab opened', {
       description: 'New clearing tab is live on Arc Testnet.',

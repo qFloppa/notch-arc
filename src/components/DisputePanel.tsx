@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
-import { erc20Abi, parseAbiItem, decodeEventLog } from 'viem'
+import { erc20Abi } from 'viem'
 import { toast } from 'sonner'
 import {
   NOTCH_CONTRACT,
@@ -34,9 +34,6 @@ const CLAIM_DEFAULTS: Record<string, string> = {
   sla_breach:    'Response latency exceeded the contracted SLA threshold. The receipt records a 30-second timeout, breaching the agreed sub-5s response window. Partial credit should apply per the SLA terms.',
 }
 
-const DISPUTE_OPENED_EVENT = parseAbiItem(
-  'event DisputeOpened(bytes32 indexed disputeId, bytes32 indexed statementId, bytes32 indexed itemId, address claimant, string claimKind, string claim, uint256 bondAmount)'
-)
 
 export default function DisputePanel({ statementId, itemIds, onDisputed }: Props) {
   const { address, chainId } = useAccount()
@@ -73,14 +70,15 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
     toast.success('Dispute filed — the Gemini arbitrator will review', {
       action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, disputeTx), '_blank') },
     })
-    // Parse disputeId from the already-available receipt and push to relayer
+    // Parse disputeId from receipt — DisputeOpened: topics[1]=disputeId (indexed)
     let disputeId: `0x${string}` | null = null
+    const CONTRACT_ADDR = NOTCH_CONTRACT.address.toLowerCase()
     for (const log of disputeReceipt.logs) {
-      try {
-        const decoded = decodeEventLog({ abi: [DISPUTE_OPENED_EVENT], ...log })
-        const id = (decoded.args as { disputeId?: `0x${string}` }).disputeId
-        if (id) { disputeId = id; break }
-      } catch { /* not this event */ }
+      if (log.address.toLowerCase() !== CONTRACT_ADDR) continue
+      if (log.topics.length >= 2 && log.topics[1]) {
+        disputeId = log.topics[1]
+        break
+      }
     }
     if (disputeId) {
       console.log('[notch] Pushing disputeId to relayer:', disputeId)

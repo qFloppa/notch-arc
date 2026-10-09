@@ -10,10 +10,7 @@ interface Props {
   onRecorded: () => void
 }
 
-// Pinned to a specific commit so the bytes never change — same fixtures the
-// original Notch repo uses for its demo runs.
-const PINNED = 'c3e34324a53f2a9a5ab9566c72b12e5a079f108e'
-const RAW_BASE = `https://raw.githubusercontent.com/Rat3dRR/notch/${PINNED}/fixtures`
+const RAW_BASE = 'https://raw.githubusercontent.com/qFloppa/notch-arc/main/notch-original/fixtures'
 
 const PRESETS = [
   {
