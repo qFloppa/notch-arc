@@ -6,7 +6,7 @@
  * and missingEnv lists what to set — a readable 200, not an opaque 500.
  */
 
-import { health } from '../../relayer/arbitrate'
+import { health } from '../../relayer/arbitrate.js'
 
 type Res = { status(code: number): Res; json(body: unknown): void }
 

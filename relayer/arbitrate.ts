@@ -12,7 +12,7 @@
 import { createPublicClient, createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { arcTestnet } from 'viem/chains'
-import { judgeDispute, fetchEvidence } from './gemini'
+import { judgeDispute, fetchEvidence } from './gemini.js'
 
 // ---- Config ----------------------------------------------------------------
 
@@ -114,20 +114,21 @@ const SUBMIT_RULING_ABI = [{
 // Built on first use, never at module load — privateKeyToAccount() throws on a missing
 // or malformed key, and a load-time throw is the same opaque 500 as above.
 
-let _clients: {
-  account: ReturnType<typeof privateKeyToAccount>
-  publicClient: ReturnType<typeof createPublicClient>
-  walletClient: ReturnType<typeof createWalletClient>
-} | null = null
-
-function clients() {
-  if (_clients) return _clients
+function buildClients() {
   const account = privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`)
-  _clients = {
+  return {
     account,
     publicClient: createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) }),
     walletClient: createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) }),
   }
+}
+
+// Inferred, not annotated: an explicit ReturnType<typeof createWalletClient> erases the
+// chain generic, and writeContract then demands an explicit `chain` arg.
+let _clients: ReturnType<typeof buildClients> | null = null
+
+function clients() {
+  if (!_clients) _clients = buildClients()
   return _clients
 }
 

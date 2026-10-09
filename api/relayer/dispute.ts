@@ -5,7 +5,7 @@
  * is killed the moment it responds, so there is no "process it in the background".
  */
 
-import { processDispute } from '../../relayer/arbitrate'
+import { processDispute } from '../../relayer/arbitrate.js'
 
 type Req = { method?: string; body?: unknown }
 type Res = { status(code: number): Res; json(body: unknown): void }

@@ -11,7 +11,7 @@
  * the same whether this process just restarted or is a cold serverless instance.
  */
 
-import { processDispute, health, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from './arbitrate'
+import { processDispute, health, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from './arbitrate.js'
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
