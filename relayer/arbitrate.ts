@@ -23,9 +23,17 @@ export const CONTRACT_ADDRESS = (
   process.env.NOTCH_CONTRACT_ADDRESS
 ) as `0x${string}` | undefined
 
-if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is required')
-if (!ARBITRATOR_PRIVATE_KEY) throw new Error('ARBITRATOR_PRIVATE_KEY is required')
-if (!CONTRACT_ADDRESS) throw new Error('VITE_NOTCH_CONTRACT_ADDRESS (or NOTCH_CONTRACT_ADDRESS) is required')
+// Deliberately NOT thrown at module load. A serverless runtime reports a module-load
+// throw as a bare FUNCTION_INVOCATION_FAILED 500 with no message, which makes a missing
+// env var indistinguishable from a broken deploy. Report it per-request instead.
+function missingConfig(): string[] {
+  const missing: string[] = []
+  if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY')
+  if (!ARBITRATOR_PRIVATE_KEY) missing.push('ARBITRATOR_PRIVATE_KEY')
+  if (!CONTRACT_ADDRESS) missing.push('VITE_NOTCH_CONTRACT_ADDRESS')
+  return missing
+}
+
 
 // RPC: prefer an explicitly configured URL, then the Arc Studio proxy, then viem's
 // default. The proxy token is a ~30min JWT, so an explicit URL is the only sane
@@ -102,21 +110,35 @@ const SUBMIT_RULING_ABI = [{
   stateMutability: 'nonpayable',
 }] as const
 
-// ---- Clients ---------------------------------------------------------------
+// ---- Clients (lazy) --------------------------------------------------------
+// Built on first use, never at module load — privateKeyToAccount() throws on a missing
+// or malformed key, and a load-time throw is the same opaque 500 as above.
 
-const account = privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`)
-export const arbitratorAddress = account.address
+let _clients: {
+  account: ReturnType<typeof privateKeyToAccount>
+  publicClient: ReturnType<typeof createPublicClient>
+  walletClient: ReturnType<typeof createWalletClient>
+} | null = null
 
-const publicClient = createPublicClient({
-  chain: arcTestnet,
-  transport: http(RPC_URL),
-})
+function clients() {
+  if (_clients) return _clients
+  const account = privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`)
+  _clients = {
+    account,
+    publicClient: createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) }),
+    walletClient: createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) }),
+  }
+  return _clients
+}
 
-const walletClient = createWalletClient({
-  account,
-  chain: arcTestnet,
-  transport: http(RPC_URL),
-})
+/** Arbitrator address, or null if the key isn't configured — never throws. */
+export function arbitratorAddress(): string | null {
+  try {
+    return clients().account.address
+  } catch {
+    return null
+  }
+}
 
 // ---- State -----------------------------------------------------------------
 // ponytail: in-memory. Long-lived locally; per-instance on Vercel, where it only
@@ -127,6 +149,20 @@ export const processedDisputes = new Set<string>()
 export const retryAfter = new Map<string, number>()   // disputeId -> earliest next attempt (ms epoch)
 export const rulingLog: Array<{ disputeId: string; outcome: string; at: string; rationale: string }> = []
 
+/** For /health — never throws, so a misconfigured deploy still returns a readable page. */
+export function health() {
+  const missing = missingConfig()
+  return {
+    status: missing.length === 0 ? 'ok' : 'misconfigured',
+    missingEnv: missing,
+    arbitrator: arbitratorAddress(),
+    contract: CONTRACT_ADDRESS ?? null,
+    rpc: RPC_URL,
+    processedThisInstance: processedDisputes.size,
+    latestRulings: rulingLog.slice(-10),
+  }
+}
+
 export type ProcessResult =
   | { ok: true; outcome: string; txHash: string; rationale: string }
   | { ok: true; skipped: string }
@@ -135,6 +171,10 @@ export type ProcessResult =
 // ---- Process a single dispute ----------------------------------------------
 
 export async function processDispute(disputeId: `0x${string}`): Promise<ProcessResult> {
+  const missing = missingConfig()
+  if (missing.length > 0) {
+    return { ok: false, error: `relayer not configured — missing env: ${missing.join(', ')}` }
+  }
   if (processedDisputes.has(disputeId)) return { ok: true, skipped: 'already processed' }
   const backoff = retryAfter.get(disputeId) ?? 0
   if (backoff > Date.now()) {
@@ -143,6 +183,8 @@ export async function processDispute(disputeId: `0x${string}`): Promise<ProcessR
   processedDisputes.add(disputeId)
 
   console.log(`[relayer] Processing dispute ${disputeId}`)
+
+  const { publicClient, walletClient } = clients()
 
   try {
     const dispute = await publicClient.readContract({

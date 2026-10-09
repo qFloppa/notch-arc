@@ -11,7 +11,7 @@
  * the same whether this process just restarted or is a cold serverless instance.
  */
 
-import { processDispute, processedDisputes, retryAfter, rulingLog, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from './arbitrate'
+import { processDispute, health, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from './arbitrate'
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
@@ -23,17 +23,7 @@ Bun.serve({
 
     // GET /health — status page
     if (req.method === 'GET' && url.pathname === '/health') {
-      return new Response(JSON.stringify({
-        status: 'ok',
-        arbitrator: arbitratorAddress,
-        contract: CONTRACT_ADDRESS,
-        rpc: RPC_URL,
-        processedDisputes: processedDisputes.size,
-        backingOff: [...retryAfter]
-          .filter(([, at]) => at > Date.now())
-          .map(([id, at]) => ({ disputeId: id, retryInSeconds: Math.round((at - Date.now()) / 1000) })),
-        latestRulings: rulingLog.slice(-10),
-      }), { headers })
+      return new Response(JSON.stringify(health()), { headers })
     }
 
     // POST /dispute — frontend pushes a disputeId to be arbitrated
@@ -57,7 +47,7 @@ Bun.serve({
 })
 
 console.log(`[relayer] Notch arbitrator relayer starting`)
-console.log(`[relayer] Arbitrator: ${arbitratorAddress}`)
+console.log(`[relayer] Arbitrator: ${arbitratorAddress() ?? '(key not configured)'}`)
 console.log(`[relayer] Contract:   ${CONTRACT_ADDRESS}`)
 console.log(`[relayer] RPC:        ${RPC_URL}`)
 console.log(`[relayer] Status:     http://localhost:${PORT}/health`)
