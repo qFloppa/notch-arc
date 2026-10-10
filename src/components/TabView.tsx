@@ -68,8 +68,15 @@ function StatusBadge({ status }: { status: number }) {
   )
 }
 
-function computeStatementHash(items: { itemId: `0x${string}`; amount: bigint }[]): `0x${string}` {
-  const sorted = [...items].sort((a, b) => (a.itemId < b.itemId ? -1 : 1))
+function formatCountdown(secs: number): string {
+  const s = Math.max(0, secs)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return r === 0 ? `${m}m` : `${m}m ${r}s`
+}
+
+function computeStatementHash(items: { itemId: `0x${string}`; amount: bigint }[]): `0x${string}` {  const sorted = [...items].sort((a, b) => (a.itemId < b.itemId ? -1 : 1))
   if (sorted.length === 0) return '0x0000000000000000000000000000000000000000000000000000000000000000'
   const types = sorted.flatMap(() => ['bytes32', 'uint256'] as const) as `${string}`[]
   const values = sorted.flatMap(x => [x.itemId, x.amount]) as unknown[]
@@ -112,7 +119,11 @@ export default function TabView({ tabId, onBack }: Props) {
   const cycleItemIdsKey = JSON.stringify(cycleItemIds)
   useEffect(() => {
     const ids = cycleItemIds as `0x${string}`[] | undefined
-    if (!client || !ids || ids.length === 0) return
+    // A closed cycle advances currentCycle to a fresh, empty one. Mirror that: clear the
+    // stale items so the Close button + cycle total disappear. Without this clear the old
+    // items linger until a page refresh, letting the user re-close and spawn empty cycles.
+    if (ids && ids.length === 0) { setCycleItems([]); return }
+    if (!client || !ids) return
     let cancelled = false
     void Promise.all(
       ids.map(id => client.readContract({ ...NOTCH_CONTRACT, functionName: 'getItem', args: [id] }))
@@ -120,6 +131,15 @@ export default function TabView({ tabId, onBack }: Props) {
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, cycleItemIdsKey, refreshToken])
+
+  // 1s ticker so the "closeable in …" countdown on the Close button stays live. Only runs
+  // while the current cycle has charges (i.e. while that button is on screen).
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    if (cycleItems.length === 0) return
+    const id = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [cycleItems.length])
 
   const [stmtList, setStmtList] = useState<StatementData[]>([])
   const statementIdsKey = JSON.stringify(statementIds)
@@ -133,6 +153,24 @@ export default function TabView({ tabId, onBack }: Props) {
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, statementIdsKey, refreshToken])
+
+  // Amounts for every line item referenced by a statement, keyed by itemId. The hash check
+  // below needs them, and the current-cycle items (cycleItems) don't cover closed cycles.
+  const [itemAmounts, setItemAmounts] = useState<Record<string, bigint>>({})
+  const stmtItemIdsKey = JSON.stringify(stmtList.map(s => s.itemIds))
+  useEffect(() => {
+    if (!client || stmtList.length === 0) return
+    const ids = [...new Set(stmtList.flatMap(s => s.itemIds))]
+    if (ids.length === 0) return
+    let cancelled = false
+    void Promise.all(
+      ids.map(async id =>
+        [id, (await client.readContract({ ...NOTCH_CONTRACT, functionName: 'getItem', args: [id] }) as LineItemData).amount] as const
+      )
+    ).then(entries => { if (!cancelled) setItemAmounts(Object.fromEntries(entries)) })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, stmtItemIdsKey])
 
   // Fetch disputes for any disputed/resolved statements
   const [disputeMap, setDisputeMap] = useState<Record<string, DisputeData>>({})
@@ -219,6 +257,7 @@ export default function TabView({ tabId, onBack }: Props) {
   useEffect(() => {
     if (closeSuccess && closeTx) {
       toast.success('Cycle closed', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, closeTx), '_blank') } })
+      setCycleItems([])   // cycle just rolled over to an empty one — drop its items now so the button can't re-fire
       refetchAll()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,6 +305,16 @@ export default function TabView({ tabId, onBack }: Props) {
   const isPayer = address?.toLowerCase() === tab.payer.toLowerCase()
   const isPayee = address?.toLowerCase() === tab.payee.toLowerCase()
   const cycleTotalUsdc = cycleItems.reduce((s, i) => s + i.amount, 0n)
+
+  // closeCycle reverts (CycleTooEarly) until a full cycleSeconds has elapsed since the
+  // current cycle started — openedAt for cycle 1, else the prior cycle's statement closedAt.
+  const cycleStartedAt = tab.currentCycle === 1n
+    ? tab.openedAt
+    : stmtList.find(s => s.cycle === tab.currentCycle - 1n)?.closedAt ?? tab.openedAt
+  // ponytail: +5s absorbs client/chain clock skew — a client clock running ahead would
+  // otherwise re-enable the button early and the tx would still revert CycleTooEarly.
+  const secsUntilCloseable = Number(cycleStartedAt + tab.cycleSeconds) + 5 - nowSec
+  const cycleCloseable = secsUntilCloseable <= 0
 
   return (
     <div className="space-y-6">
@@ -399,13 +448,17 @@ export default function TabView({ tabId, onBack }: Props) {
               <button
                 onClick={() => {
                   if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+                  if (!cycleCloseable) return
                   closeCycle({ ...NOTCH_CONTRACT, functionName: 'closeCycle', args: [tabId], chainId: ARC_TESTNET_CHAIN_ID })
                 }}
-                disabled={isClosing || isCloseConfirming}
+                disabled={isClosing || isCloseConfirming || !cycleCloseable}
                 className="mt-3 w-full py-2.5 rounded-xl font-semibold text-sm disabled:opacity-40"
                 style={{ background: 'var(--surface-2)', color: 'var(--ink)', border: '1px solid var(--border-2)' }}
               >
-                {isClosing ? 'Confirm in wallet…' : isCloseConfirming ? 'Closing cycle…' : 'Close Cycle and Create Statement'}
+                {isClosing ? 'Confirm in wallet…'
+                  : isCloseConfirming ? 'Closing cycle…'
+                  : !cycleCloseable ? `Cycle still open — closeable in ${formatCountdown(secsUntilCloseable)}`
+                  : 'Close Cycle and Create Statement'}
               </button>
             )}
           </section>
@@ -425,9 +478,10 @@ export default function TabView({ tabId, onBack }: Props) {
             ) : (
               <div className="space-y-3">
                 {stmtList.map(stmt => {
-                  const stmtItemsInCurrentCycle = cycleItems.filter(i => stmt.itemIds.includes(i.itemId))
-                  const computedHash = stmtItemsInCurrentCycle.length === stmt.itemIds.length && stmt.itemIds.length > 0
-                    ? computeStatementHash(stmtItemsInCurrentCycle)
+                  const stmtItems = stmt.itemIds.map(id => ({ itemId: id, amount: itemAmounts[id] }))
+                  const haveAllAmounts = stmt.itemIds.length > 0 && stmtItems.every(x => x.amount !== undefined)
+                  const computedHash = haveAllAmounts
+                    ? computeStatementHash(stmtItems as { itemId: `0x${string}`; amount: bigint }[])
                     : null
                   const hashMatch = computedHash !== null && computedHash === stmt.statementHash
 
