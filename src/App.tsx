@@ -6,6 +6,7 @@ import Header from './components/Header'
 import CycleDashboard from './components/CycleDashboard'
 import TabView from './components/TabView'
 import RulingAdmin from './components/RulingAdmin'
+import ClaimCredit from './components/ClaimCredit'
 
 type View = { page: 'dashboard' } | { page: 'tab'; tabId: `0x${string}` } | { page: 'admin' }
 
@@ -96,6 +97,8 @@ export default function App() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
+        <ClaimCredit />
+
         {view.page === 'dashboard' && (
           <CycleDashboard
             tabs={tabs}

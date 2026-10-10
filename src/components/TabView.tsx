@@ -13,7 +13,7 @@ import {
   formatTimestamp,
   pushDispute,
 } from '../notch-contract'
-import { buildTxExplorerUrl, buildAddressExplorerUrl } from '@/onchain-facts'
+import { buildTxExplorerUrl } from '@/onchain-facts'
 import RecordChargeForm from './RecordChargeForm'
 import DisputePanel from './DisputePanel'
 
@@ -140,7 +140,7 @@ export default function TabView({ tabId, onBack }: Props) {
   const stmtListKey = JSON.stringify(stmtList.map(s => ({ id: s.statementId, status: s.status, items: s.itemIds })))
   useEffect(() => {
     if (!client || stmtList.length === 0) return
-    const disputedStmts = stmtList.filter(s => s.status === 2 || s.status === 3) // Disputed or Resolved
+    const disputedStmts = stmtList.filter(s => s.status === 2 || s.status === 3 || s.status === 4) // Disputed, Resolved, or Settled
     if (disputedStmts.length === 0) return
     let cancelled = false
     const fetchDisputes = async () => {
@@ -193,20 +193,17 @@ export default function TabView({ tabId, onBack }: Props) {
   const { writeContract: approveUsdc, data: approveTx, isPending: isApproving } = useWriteContract()
   const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx })
 
-  // Claimable balance = resolved-dispute bond credits owed to this wallet. It's global
-  // (not per-tab) but surfaced here, since this is where disputes happen.
-  // ponytail: global credit shown in the tab view; fine for a demo.
-  const { data: creditRaw, refetch: refetchCredit } = useReadContract({
-    ...NOTCH_CONTRACT,
-    functionName: 'getCredit',
-    args: [address ?? '0x0000000000000000000000000000000000000000'],
+  // USDC the payer has approved the Notch contract to pull. Settle can't move funds until
+  // this covers the statement's net amount, so the Settle button keys off it.
+  const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [address ?? '0x0000000000000000000000000000000000000000', NOTCH_CONTRACT.address],
     chainId: ARC_TESTNET_CHAIN_ID,
     query: { enabled: !!address },
   })
-  const credit = (creditRaw as bigint | undefined) ?? 0n
-
-  const { writeContract: withdraw, data: withdrawTx, isPending: isWithdrawing } = useWriteContract()
-  const { isLoading: isWithdrawConfirming, isSuccess: withdrawSuccess } = useWaitForTransactionReceipt({ hash: withdrawTx })
+  const allowance = (allowanceRaw as bigint | undefined) ?? 0n
 
   const refetchAll = () => { triggerRefresh() }
 
@@ -214,7 +211,7 @@ export default function TabView({ tabId, onBack }: Props) {
   // struct effects above also key on refreshToken, so status-only changes surface too.
   useEffect(() => {
     if (refreshToken === 0) return
-    void refetchTab(); void refetchCycleItems(); void refetchStatements(); void refetchCredit()
+    void refetchTab(); void refetchCycleItems(); void refetchStatements(); void refetchAllowance()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken])
 
@@ -243,15 +240,7 @@ export default function TabView({ tabId, onBack }: Props) {
   }, [settleSuccess, settleTx])
 
   useEffect(() => {
-    if (withdrawSuccess && withdrawTx) {
-      toast.success('Withdrew bond credit to your wallet', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, withdrawTx), '_blank') } })
-      void refetchCredit(); triggerRefresh()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [withdrawSuccess, withdrawTx])
-
-  useEffect(() => {
-    if (approveSuccess) toast.success('USDC approved — you can now settle')
+    if (approveSuccess) { toast.success('USDC approved — you can now settle'); void refetchAllowance() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approveSuccess])
 
@@ -355,30 +344,6 @@ export default function TabView({ tabId, onBack }: Props) {
                 {formatUsdc(cycleTotalUsdc)} <span className="text-sm font-medium" style={{ color: 'var(--muted)' }}>USDC</span>
               </p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--subtle)' }}>{cycleItems.length} charge{cycleItems.length !== 1 ? 's' : ''}</p>
-            </div>
-          )}
-
-          {/* Claimable balance — bond credits from resolved disputes, pulled via withdraw() */}
-          {credit > 0n && (
-            <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid rgba(63,185,80,0.3)' }}>
-              <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--subtle)' }}>Claimable balance</p>
-              <p className="display text-xl font-bold tabular" style={{ color: 'var(--success)' }}>
-                {formatUsdc(credit)} <span className="text-sm font-medium" style={{ color: 'var(--muted)' }}>USDC</span>
-              </p>
-              <p className="text-xs mt-0.5 mb-3" style={{ color: 'var(--subtle)' }}>
-                Won dispute bonds, held in the Notch contract until you claim them.
-              </p>
-              <button
-                onClick={() => {
-                  if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
-                  withdraw({ ...NOTCH_CONTRACT, functionName: 'withdraw', args: [credit], chainId: ARC_TESTNET_CHAIN_ID })
-                }}
-                disabled={isWithdrawing || isWithdrawConfirming}
-                className="w-full py-2 rounded-lg font-semibold text-sm disabled:opacity-40"
-                style={{ background: 'var(--success-dim)', color: 'var(--success)', border: '1px solid rgba(63,185,80,0.3)' }}
-              >
-                {isWithdrawing ? 'Confirm in wallet…' : isWithdrawConfirming ? 'Claiming…' : `Claim ${formatUsdc(credit)} USDC`}
-              </button>
             </div>
           )}
         </div>
@@ -554,11 +519,11 @@ export default function TabView({ tabId, onBack }: Props) {
                                 if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
                                 settleStatement({ ...NOTCH_CONTRACT, functionName: 'settleStatement', args: [stmt.statementId], chainId: ARC_TESTNET_CHAIN_ID })
                               }}
-                              disabled={isSettling || isSettleConfirming}
+                              disabled={isSettling || isSettleConfirming || allowance < stmt.netAmount}
                               className="text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-40"
                               style={{ background: 'var(--accent)', color: '#0d1117' }}
                             >
-                              {isSettling ? 'Confirm…' : 'Settle'}
+                              {isSettling ? 'Confirm…' : isSettleConfirming ? 'Settling…' : allowance < stmt.netAmount ? 'Approve first' : 'Settle'}
                             </button>
                           </>
                         )}
@@ -568,8 +533,8 @@ export default function TabView({ tabId, onBack }: Props) {
                         )}
                       </div>
 
-                      {/* Dispute ruling — shown for Disputed (2) and Resolved (3) */}
-                      {(stmt.status === 2 || stmt.status === 3) && disputeMap[stmt.statementId] && (
+                      {/* Dispute ruling — shown for Disputed (2), Resolved (3), and Settled (4) */}
+                      {(stmt.status === 2 || stmt.status === 3 || stmt.status === 4) && disputeMap[stmt.statementId] && (
                         <DisputeCard dispute={disputeMap[stmt.statementId]} arb={arbState[stmt.statementId]} payee={tab.payee} viewer={address} />
                       )}
                       {(stmt.status === 2 || stmt.status === 3) && !disputeMap[stmt.statementId] && (
@@ -669,25 +634,16 @@ function DisputeCard({ dispute, arb, payee, viewer }: { dispute: DisputeData; ar
           <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: 'var(--subtle)' }}>Bond settled</p>
           {refund > 0n && (
             <p className="text-xs" style={{ color: 'var(--ink-2)' }}>
-              ↩ {formatUsdc(refund)} USDC refunded to {viewerIsClaimant ? 'you' : `claimant ${formatAddress(dispute.claimant)}`}
+              ↩ {formatUsdc(refund)} USDC credited to {viewerIsClaimant ? 'your' : "the claimant's"} claimable balance
             </p>
           )}
           {payeePortion > 0n && (
             <p className="text-xs" style={{ color: 'var(--ink-2)' }}>
-              → {formatUsdc(payeePortion)} USDC awarded to {viewerIsPayee ? 'you' : 'payee'}{' '}
-              <a
-                href={buildAddressExplorerUrl(ARC_TESTNET_CHAIN_ID, payee)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mono"
-                style={{ color: 'var(--accent)' }}
-              >
-                {formatAddress(payee)} ↗
-              </a>
+              → {formatUsdc(payeePortion)} USDC credited to {viewerIsPayee ? 'your' : "the payee's"} claimable balance
             </p>
           )}
           <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-            Credited to the winner's claimable balance, held in the Notch contract until withdrawn.
+            Not sent to any wallet — it waits as a claimable credit in the Notch contract until the winner clicks Claim.
             {rulingTx && (
               <>
                 {' · '}

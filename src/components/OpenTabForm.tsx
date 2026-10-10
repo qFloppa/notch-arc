@@ -44,6 +44,12 @@ export default function OpenTabForm({ onCreated }: Props) {
       if (log.topics.length >= 2 && log.topics[1]) {
         const tabId = log.topics[1]
         addStoredTabId(address, tabId)
+        // Register under the payee too, so they see the tab when they connect in this
+        // browser. Cross-device, the payee loads it with the "Paste a tab ID" field.
+        const payeeAddr = payee.trim().toLowerCase()
+        if (payeeAddr.startsWith('0x') && payeeAddr.length === 42 && payeeAddr !== address.toLowerCase()) {
+          addStoredTabId(payeeAddr, tabId)
+        }
         console.log('[notch] TabOpened — tabId stored:', tabId)
         break
       }
