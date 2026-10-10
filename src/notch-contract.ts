@@ -1,11 +1,11 @@
 /**
  * Notch contract config — Arc Testnet
- * Address: 0xeffe19557a9cac8bf25ef6d3f072481d46a0938a
+ * Address: 0x53F07375799558592Ea90344d14495D007C30f97
  */
 import artifact from '../contracts/out/Notch.sol/Notch.json'
 
 export const NOTCH_CONTRACT = {
-  address: '0xeffe19557a9cac8bf25ef6d3f072481d46a0938a' as const,
+  address: '0x53F07375799558592Ea90344d14495D007C30f97' as const,
   abi: artifact.abi,
 } as const
 

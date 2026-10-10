@@ -14,7 +14,8 @@ Notch is a USDC clearing layer for agent micropayments on Arc Testnet. Agents op
 
 | Contract | Network | Address | Explorer |
 |---|---|---|---|
-| Notch | Arc Testnet | 0xeffe19557a9cac8bf25ef6d3f072481d46a0938a | https://explorer.testnet.arc.io/address/0xeffe19557a9cac8bf25ef6d3f072481d46a0938a |
+| Notch (current) | Arc Testnet | 0x53F07375799558592Ea90344d14495D007C30f97 | https://explorer.testnet.arc.io/address/0x53F07375799558592Ea90344d14495D007C30f97 |
+| Notch (stale — upheld disputes didn't excuse the charge) | Arc Testnet | 0xeffe19557a9cac8bf25ef6d3f072481d46a0938a | https://explorer.testnet.arc.io/address/0xeffe19557a9cac8bf25ef6d3f072481d46a0938a |
 | Notch (old, stale — missing getters) | Arc Testnet | 0x7c7cc8322ba3db93381823a9161e47a85d490fc8 | https://explorer.testnet.arc.io/address/0x7c7cc8322ba3db93381823a9161e47a85d490fc8 |
 
 ### Constructor args used
