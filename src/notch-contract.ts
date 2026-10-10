@@ -53,26 +53,37 @@ export function formatTimestamp(ts: bigint): string {
 
 const pushedDisputes = new Set<string>()
 
+export type PushResult =
+  | { ok: true; outcome?: string; skipped?: string }
+  | { ok: false; error: string; retryAfterMs?: number }
+
 /**
- * Hand a disputeId to the arbitrator relayer. Fire-and-forget: a ruling takes ~10s and
- * arrives on-chain, so there is nothing to wait for here. `/relayer` is the Vite dev
- * proxy locally and a vercel.json rewrite to /api/relayer in production.
+ * Hand a disputeId to the arbitrator relayer and report what came back, so the UI can
+ * show "reviewing" vs "overloaded, retrying". `/relayer` is the Vite dev proxy locally
+ * and a vercel.json rewrite to /api/relayer in production.
  *
- * Deduped per page load — pushing twice would pay Gemini twice for one dispute.
+ * Deduped per page load while a push is in flight or has succeeded — pushing twice would
+ * pay Gemini twice for one dispute. A failed push clears the dedupe so a later poll can
+ * retry (e.g. after a transient overload). Callers may re-invoke on each poll; this
+ * swallows the duplicates.
  */
-export function pushDispute(disputeId: `0x${string}`) {
-  if (pushedDisputes.has(disputeId)) return
+export async function pushDispute(disputeId: `0x${string}`): Promise<PushResult | null> {
+  if (pushedDisputes.has(disputeId)) return null   // in flight or already done this load
   pushedDisputes.add(disputeId)
   console.log('[notch] Pushing disputeId to relayer:', disputeId)
-  void fetch('/relayer/dispute', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ disputeId }),
-  })
-    .then(r => r.json())
-    .then(d => console.log('[notch] Relayer response:', d))
-    .catch(e => {
-      pushedDisputes.delete(disputeId)   // network failure — let a later load retry
-      console.warn('[notch] Relayer push failed:', e)
+  try {
+    const res = await fetch('/relayer/dispute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disputeId }),
     })
+    const data = await res.json() as PushResult
+    console.log('[notch] Relayer response:', data)
+    if (!data.ok) pushedDisputes.delete(disputeId)   // allow a later poll to retry
+    return data
+  } catch (e) {
+    pushedDisputes.delete(disputeId)                 // network failure — let a later poll retry
+    console.warn('[notch] Relayer push failed:', e)
+    return { ok: false, error: 'relayer unreachable' }
+  }
 }

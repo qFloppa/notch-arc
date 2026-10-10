@@ -9,7 +9,6 @@ import {
   CLAIM_KINDS,
   BOND_AMOUNT,
   formatUsdc,
-  pushDispute,
 } from '../notch-contract'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 
@@ -71,24 +70,11 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
     toast.success('Dispute filed — the Gemini arbitrator will review', {
       action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, disputeTx), '_blank') },
     })
-    // Parse disputeId from receipt — DisputeOpened: topics[1]=disputeId (indexed)
-    let disputeId: `0x${string}` | null = null
-    const CONTRACT_ADDR = NOTCH_CONTRACT.address.toLowerCase()
-    for (const log of disputeReceipt.logs) {
-      if (log.address.toLowerCase() !== CONTRACT_ADDR) continue
-      if (log.topics.length >= 2 && log.topics[1]) {
-        disputeId = log.topics[1]
-        break
-      }
-    }
-    if (disputeId) {
-      pushDispute(disputeId)
-    } else {
-      console.warn('[notch] Could not parse disputeId from receipt logs', disputeReceipt.logs)
-    }
     setOpen(false)
     setStep('form')
     setClaim('')
+    // TabView reads the new Disputed statement from chain and pushes it to the relayer;
+    // this just tells it to refresh now so the dispute card appears without a reload.
     onDisputed()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeSuccess, disputeTx, disputeReceipt])

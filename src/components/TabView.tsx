@@ -22,6 +22,10 @@ interface Props {
   onBack: () => void
 }
 
+// How often to re-read on-chain state while something is still in flight (a pending
+// ruling, an unsettled statement). ponytail: fixed 5s; fine for a testnet demo.
+const POLL_MS = 5000
+
 type TabData = {
   tabId: `0x${string}`; creator: `0x${string}`; payer: `0x${string}`; payee: `0x${string}`
   cycleSeconds: bigint; currentCycle: bigint; openedAt: bigint; active: boolean
@@ -80,6 +84,12 @@ export default function TabView({ tabId, onBack }: Props) {
   const { address, chainId } = useAccount()
   const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
 
+  // Bump to force a re-read of the on-chain structs below. They are cached against the
+  // ID lists, so a status-only transition (dispute filed, ruling in, accepted, settled)
+  // wouldn't otherwise re-fetch. Mirrors App.tsx's refreshToken idiom.
+  const [refreshToken, setRefreshToken] = useState(0)
+  const triggerRefresh = () => setRefreshToken(t => t + 1)
+
   const { data: tabRaw, refetch: refetchTab } = useReadContract({
     ...NOTCH_CONTRACT, functionName: 'getTab', args: [tabId], chainId: ARC_TESTNET_CHAIN_ID,
   })
@@ -108,7 +118,7 @@ export default function TabView({ tabId, onBack }: Props) {
     ).then(results => { if (!cancelled) setCycleItems(results as LineItemData[]) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, cycleItemIdsKey])
+  }, [client, cycleItemIdsKey, refreshToken])
 
   const [stmtList, setStmtList] = useState<StatementData[]>([])
   const statementIdsKey = JSON.stringify(statementIds)
@@ -121,10 +131,12 @@ export default function TabView({ tabId, onBack }: Props) {
     ).then(results => { if (!cancelled) setStmtList(results as StatementData[]) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, statementIdsKey])
+  }, [client, statementIdsKey, refreshToken])
 
   // Fetch disputes for any disputed/resolved statements
   const [disputeMap, setDisputeMap] = useState<Record<string, DisputeData>>({})
+  // Per-dispute arbitration state, keyed by statementId, for the waiting indicator.
+  const [arbState, setArbState] = useState<Record<string, 'reviewing' | 'busy'>>({})
   const stmtListKey = JSON.stringify(stmtList.map(s => ({ id: s.statementId, status: s.status, items: s.itemIds })))
   useEffect(() => {
     if (!client || stmtList.length === 0) return
@@ -146,9 +158,18 @@ export default function TabView({ tabId, onBack }: Props) {
                 ...NOTCH_CONTRACT, functionName: 'getDispute', args: [disputeId],
               }) as DisputeData
               entries[stmt.statementId] = dispute
-              // The relayer holds no state between requests, so this is what guarantees a
-              // dispute gets arbitrated even if the push at filing time never landed.
-              if (dispute.status === 0) pushDispute(disputeId)
+              // Still Open on-chain → make sure the relayer is working it, and reflect the
+              // result in the UI. The relayer holds no state between requests, so re-pushing
+              // on each poll is what guarantees it gets arbitrated. pushDispute dedupes an
+              // in-flight/succeeded push and returns null for those.
+              if (dispute.status === 0) {
+                const sid = stmt.statementId
+                setArbState(s => ({ ...s, [sid]: s[sid] ?? 'reviewing' }))
+                void pushDispute(disputeId).then(result => {
+                  if (cancelled || !result) return
+                  setArbState(s => ({ ...s, [sid]: result.ok ? 'reviewing' : 'busy' }))
+                })
+              }
             } catch { /* no dispute for this item */ }
           })
         )
@@ -158,7 +179,7 @@ export default function TabView({ tabId, onBack }: Props) {
     void fetchDisputes()
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, stmtListKey])
+  }, [client, stmtListKey, refreshToken])
 
   const { writeContract: closeCycle, data: closeTx, isPending: isClosing } = useWriteContract()
   const { isLoading: isCloseConfirming, isSuccess: closeSuccess } = useWaitForTransactionReceipt({ hash: closeTx })
@@ -172,7 +193,15 @@ export default function TabView({ tabId, onBack }: Props) {
   const { writeContract: approveUsdc, data: approveTx, isPending: isApproving } = useWriteContract()
   const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx })
 
-  const refetchAll = () => { void refetchTab(); void refetchCycleItems(); void refetchStatements(); setDisputeMap({}) }
+  const refetchAll = () => { triggerRefresh() }
+
+  // One place to re-pull the ID lists when something changed or the poll ticked; the
+  // struct effects above also key on refreshToken, so status-only changes surface too.
+  useEffect(() => {
+    if (refreshToken === 0) return
+    void refetchTab(); void refetchCycleItems(); void refetchStatements()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshToken])
 
   useEffect(() => {
     if (closeSuccess && closeTx) {
@@ -185,7 +214,7 @@ export default function TabView({ tabId, onBack }: Props) {
   useEffect(() => {
     if (acceptSuccess && acceptTx) {
       toast.success('Statement accepted', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, acceptTx), '_blank') } })
-      void refetchStatements()
+      triggerRefresh()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acceptSuccess, acceptTx])
@@ -193,7 +222,7 @@ export default function TabView({ tabId, onBack }: Props) {
   useEffect(() => {
     if (settleSuccess && settleTx) {
       toast.success('Statement settled — USDC transferred', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, settleTx), '_blank') } })
-      void refetchStatements()
+      triggerRefresh()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settleSuccess, settleTx])
@@ -202,6 +231,16 @@ export default function TabView({ tabId, onBack }: Props) {
     if (approveSuccess) toast.success('USDC approved — you can now settle')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approveSuccess])
+
+  // Poll while anything can still change — a pending ruling, an unsettled statement, or
+  // an open cycle (the counterparty may record or close). Stops once everything settles.
+  const anyPending = stmtList.some(s => s.status !== 4) || cycleItems.length > 0
+  useEffect(() => {
+    if (!anyPending) return
+    const id = setInterval(triggerRefresh, POLL_MS)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyPending])
 
   if (!tab) {
     return (
@@ -306,7 +345,7 @@ export default function TabView({ tabId, onBack }: Props) {
                 Current Cycle Charges
               </h3>
               {isPayer && tab.active && (
-                <RecordChargeForm tabId={tabId} onRecorded={() => { void refetchCycleItems(); void refetchTab() }} />
+                <RecordChargeForm tabId={tabId} onRecorded={() => triggerRefresh()} />
               )}
             </div>
 
@@ -478,13 +517,13 @@ export default function TabView({ tabId, onBack }: Props) {
                         )}
 
                         {isPayer && stmt.status === 0 && (
-                          <DisputePanel statementId={stmt.statementId} itemIds={stmt.itemIds} onDisputed={() => { void refetchStatements(); setDisputeMap({}) }} />
+                          <DisputePanel statementId={stmt.statementId} itemIds={stmt.itemIds} onDisputed={() => triggerRefresh()} />
                         )}
                       </div>
 
                       {/* Dispute ruling — shown for Disputed (2) and Resolved (3) */}
                       {(stmt.status === 2 || stmt.status === 3) && disputeMap[stmt.statementId] && (
-                        <DisputeCard dispute={disputeMap[stmt.statementId]} />
+                        <DisputeCard dispute={disputeMap[stmt.statementId]} arb={arbState[stmt.statementId]} />
                       )}
                       {(stmt.status === 2 || stmt.status === 3) && !disputeMap[stmt.statementId] && (
                         <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--subtle)' }}>
@@ -510,7 +549,7 @@ const OUTCOME_STYLE: Record<string, { bg: string; color: string }> = {
   rejected: { bg: 'var(--danger-dim)',  color: 'var(--danger)' },
 }
 
-function DisputeCard({ dispute }: { dispute: DisputeData }) {
+function DisputeCard({ dispute, arb }: { dispute: DisputeData; arb?: 'reviewing' | 'busy' }) {
   const isPending = dispute.status === 0
   const outcomeStyle = OUTCOME_STYLE[dispute.outcome] ?? { bg: 'var(--surface-3)', color: 'var(--muted)' }
 
@@ -595,9 +634,20 @@ function DisputeCard({ dispute }: { dispute: DisputeData }) {
       )}
 
       {isPending && (
-        <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-          The Gemini relayer will poll this dispute and submit a ruling automatically.
-        </p>
+        <div
+          className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
+          style={arb === 'busy'
+            ? { background: 'var(--warning-dim)', color: 'var(--warning)' }
+            : { background: 'var(--surface-2)', color: 'var(--subtle)' }}
+        >
+          <div
+            className="w-3 h-3 rounded-full border border-current animate-spin shrink-0"
+            style={{ borderTopColor: 'transparent' }}
+          />
+          {arb === 'busy'
+            ? 'Gemini is busy (rate-limited or overloaded) — the arbitrator is retrying automatically. This can take a moment.'
+            : 'Arbitrator reviewing — the Gemini ruling will appear here automatically.'}
+        </div>
       )}
     </div>
   )
