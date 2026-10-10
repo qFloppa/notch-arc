@@ -13,7 +13,7 @@ import {
   formatTimestamp,
   pushDispute,
 } from '../notch-contract'
-import { buildTxExplorerUrl } from '@/onchain-facts'
+import { buildTxExplorerUrl, buildAddressExplorerUrl } from '@/onchain-facts'
 import RecordChargeForm from './RecordChargeForm'
 import DisputePanel from './DisputePanel'
 
@@ -193,13 +193,28 @@ export default function TabView({ tabId, onBack }: Props) {
   const { writeContract: approveUsdc, data: approveTx, isPending: isApproving } = useWriteContract()
   const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx })
 
+  // Claimable balance = resolved-dispute bond credits owed to this wallet. It's global
+  // (not per-tab) but surfaced here, since this is where disputes happen.
+  // ponytail: global credit shown in the tab view; fine for a demo.
+  const { data: creditRaw, refetch: refetchCredit } = useReadContract({
+    ...NOTCH_CONTRACT,
+    functionName: 'getCredit',
+    args: [address ?? '0x0000000000000000000000000000000000000000'],
+    chainId: ARC_TESTNET_CHAIN_ID,
+    query: { enabled: !!address },
+  })
+  const credit = (creditRaw as bigint | undefined) ?? 0n
+
+  const { writeContract: withdraw, data: withdrawTx, isPending: isWithdrawing } = useWriteContract()
+  const { isLoading: isWithdrawConfirming, isSuccess: withdrawSuccess } = useWaitForTransactionReceipt({ hash: withdrawTx })
+
   const refetchAll = () => { triggerRefresh() }
 
   // One place to re-pull the ID lists when something changed or the poll ticked; the
   // struct effects above also key on refreshToken, so status-only changes surface too.
   useEffect(() => {
     if (refreshToken === 0) return
-    void refetchTab(); void refetchCycleItems(); void refetchStatements()
+    void refetchTab(); void refetchCycleItems(); void refetchStatements(); void refetchCredit()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken])
 
@@ -226,6 +241,14 @@ export default function TabView({ tabId, onBack }: Props) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settleSuccess, settleTx])
+
+  useEffect(() => {
+    if (withdrawSuccess && withdrawTx) {
+      toast.success('Withdrew bond credit to your wallet', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, withdrawTx), '_blank') } })
+      void refetchCredit(); triggerRefresh()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withdrawSuccess, withdrawTx])
 
   useEffect(() => {
     if (approveSuccess) toast.success('USDC approved — you can now settle')
@@ -332,6 +355,30 @@ export default function TabView({ tabId, onBack }: Props) {
                 {formatUsdc(cycleTotalUsdc)} <span className="text-sm font-medium" style={{ color: 'var(--muted)' }}>USDC</span>
               </p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--subtle)' }}>{cycleItems.length} charge{cycleItems.length !== 1 ? 's' : ''}</p>
+            </div>
+          )}
+
+          {/* Claimable balance — bond credits from resolved disputes, pulled via withdraw() */}
+          {credit > 0n && (
+            <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid rgba(63,185,80,0.3)' }}>
+              <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--subtle)' }}>Claimable balance</p>
+              <p className="display text-xl font-bold tabular" style={{ color: 'var(--success)' }}>
+                {formatUsdc(credit)} <span className="text-sm font-medium" style={{ color: 'var(--muted)' }}>USDC</span>
+              </p>
+              <p className="text-xs mt-0.5 mb-3" style={{ color: 'var(--subtle)' }}>
+                Won dispute bonds, held in the Notch contract until you claim them.
+              </p>
+              <button
+                onClick={() => {
+                  if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+                  withdraw({ ...NOTCH_CONTRACT, functionName: 'withdraw', args: [credit], chainId: ARC_TESTNET_CHAIN_ID })
+                }}
+                disabled={isWithdrawing || isWithdrawConfirming}
+                className="w-full py-2 rounded-lg font-semibold text-sm disabled:opacity-40"
+                style={{ background: 'var(--success-dim)', color: 'var(--success)', border: '1px solid rgba(63,185,80,0.3)' }}
+              >
+                {isWithdrawing ? 'Confirm in wallet…' : isWithdrawConfirming ? 'Claiming…' : `Claim ${formatUsdc(credit)} USDC`}
+              </button>
             </div>
           )}
         </div>
@@ -523,7 +570,7 @@ export default function TabView({ tabId, onBack }: Props) {
 
                       {/* Dispute ruling — shown for Disputed (2) and Resolved (3) */}
                       {(stmt.status === 2 || stmt.status === 3) && disputeMap[stmt.statementId] && (
-                        <DisputeCard dispute={disputeMap[stmt.statementId]} arb={arbState[stmt.statementId]} />
+                        <DisputeCard dispute={disputeMap[stmt.statementId]} arb={arbState[stmt.statementId]} payee={tab.payee} viewer={address} />
                       )}
                       {(stmt.status === 2 || stmt.status === 3) && !disputeMap[stmt.statementId] && (
                         <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--subtle)' }}>
@@ -549,9 +596,30 @@ const OUTCOME_STYLE: Record<string, { bg: string; color: string }> = {
   rejected: { bg: 'var(--danger-dim)',  color: 'var(--danger)' },
 }
 
-function DisputeCard({ dispute, arb }: { dispute: DisputeData; arb?: 'reviewing' | 'busy' }) {
+function DisputeCard({ dispute, arb, payee, viewer }: { dispute: DisputeData; arb?: 'reviewing' | 'busy'; payee: `0x${string}`; viewer?: `0x${string}` }) {
   const isPending = dispute.status === 0
   const outcomeStyle = OUTCOME_STYLE[dispute.outcome] ?? { bg: 'var(--surface-3)', color: 'var(--muted)' }
+
+  // Where the bond went: refunded to the claimant (payer) vs. awarded to the payee.
+  const refund = dispute.claimantBondAward
+  const payeePortion = dispute.bondAmount - dispute.claimantBondAward
+  const viewerIsClaimant = viewer?.toLowerCase() === dispute.claimant.toLowerCase()
+  const viewerIsPayee = viewer?.toLowerCase() === payee.toLowerCase()
+
+  // Best-effort ruling-tx link via the BondCredited event (indexed by disputeId).
+  // ponytail: full-range log scan; Arc RPC may cap the range and reject — if so we fall
+  // back to the recipient's address link, which always resolves.
+  const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const [rulingTx, setRulingTx] = useState<`0x${string}` | null>(null)
+  useEffect(() => {
+    if (isPending || !client) return
+    let cancelled = false
+    void client.getContractEvents({
+      ...NOTCH_CONTRACT, eventName: 'BondCredited', args: { disputeId: dispute.disputeId }, fromBlock: 0n, toBlock: 'latest',
+    }).then(logs => { if (!cancelled && logs[0]?.transactionHash) setRulingTx(logs[0].transactionHash) }).catch(() => {})
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPending, dispute.disputeId])
 
   return (
     <div className="rounded-xl p-4 space-y-3 mt-2" style={{ background: 'rgba(121,192,255,0.04)', border: '1px solid rgba(121,192,255,0.15)' }}>
@@ -587,14 +655,6 @@ function DisputeCard({ dispute, arb }: { dispute: DisputeData; arb?: 'reviewing'
           <p className="text-xs uppercase tracking-widest font-semibold mb-0.5" style={{ color: 'var(--subtle)' }}>Bond posted</p>
           <p className="tabular text-sm font-semibold" style={{ color: 'var(--ink)' }}>{formatUsdc(dispute.bondAmount)} USDC</p>
         </div>
-        {!isPending && (
-          <div>
-            <p className="text-xs uppercase tracking-widest font-semibold mb-0.5" style={{ color: 'var(--subtle)' }}>Bond settled</p>
-            <p className="text-sm font-semibold" style={{ color: dispute.bondCredited ? 'var(--success)' : 'var(--muted)' }}>
-              {dispute.bondCredited ? 'Credited to winner' : 'Pending'}
-            </p>
-          </div>
-        )}
         {!isPending && dispute.outcome === 'adjusted' && (
           <div>
             <p className="text-xs uppercase tracking-widest font-semibold mb-0.5" style={{ color: 'var(--subtle)' }}>Revised amount</p>
@@ -602,6 +662,43 @@ function DisputeCard({ dispute, arb }: { dispute: DisputeData; arb?: 'reviewing'
           </div>
         )}
       </div>
+
+      {/* Where the bond went */}
+      {!isPending && dispute.bondCredited && (
+        <div className="space-y-1 rounded-lg px-3 py-2.5" style={{ background: 'var(--surface-2)' }}>
+          <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: 'var(--subtle)' }}>Bond settled</p>
+          {refund > 0n && (
+            <p className="text-xs" style={{ color: 'var(--ink-2)' }}>
+              ↩ {formatUsdc(refund)} USDC refunded to {viewerIsClaimant ? 'you' : `claimant ${formatAddress(dispute.claimant)}`}
+            </p>
+          )}
+          {payeePortion > 0n && (
+            <p className="text-xs" style={{ color: 'var(--ink-2)' }}>
+              → {formatUsdc(payeePortion)} USDC awarded to {viewerIsPayee ? 'you' : 'payee'}{' '}
+              <a
+                href={buildAddressExplorerUrl(ARC_TESTNET_CHAIN_ID, payee)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mono"
+                style={{ color: 'var(--accent)' }}
+              >
+                {formatAddress(payee)} ↗
+              </a>
+            </p>
+          )}
+          <p className="text-xs" style={{ color: 'var(--subtle)' }}>
+            Credited to the winner's claimable balance, held in the Notch contract until withdrawn.
+            {rulingTx && (
+              <>
+                {' · '}
+                <a href={buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, rulingTx)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                  Ruling tx ↗
+                </a>
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Evidence hash check */}
       {!isPending && (
