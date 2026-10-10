@@ -1,6 +1,7 @@
 import { ConnectKitButton } from 'connectkit'
 import { useAccount, useSwitchChain } from 'wagmi'
 import { ARC_TESTNET_CHAIN_ID } from '../notch-contract'
+import NotchLogo from './NotchLogo'
 
 export default function Header() {
   const { chainId } = useAccount()
@@ -18,19 +19,10 @@ export default function Header() {
       }}
     >
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-        {/* Logo — the notch tally-stick at 28px, slightly rotated for character */}
+        {/* Logo — the notch tally-stick render at 28px, slightly rotated for character */}
         <div className="flex items-center gap-2.5">
           <div className="relative w-8 h-11 flex items-center justify-center shrink-0">
-            <img
-              src="/notch-logo.svg"
-              alt="Notch logo"
-              style={{
-                width: 28,
-                height: 42,
-                transform: 'rotate(-6deg)',
-                filter: 'drop-shadow(0 2px 6px rgba(58,130,246,0.4))',
-              }}
-            />
+            <NotchLogo width={22} height={44} rotate={-6} />
           </div>
           <span className="display font-semibold text-base" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
             Notch

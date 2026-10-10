@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
 import { erc20Abi } from 'viem'
 import { toast } from 'sonner'
 import {
@@ -16,6 +16,21 @@ interface Props {
   statementId: `0x${string}`
   itemIds: `0x${string}`[]
   onDisputed: () => void
+}
+
+type ItemInfo = {
+  itemId: `0x${string}`
+  amount: bigint
+  memo: string
+  cycle: bigint
+  evidenceUri: string
+}
+
+/** Human-readable charge label for the dropdown, falling back to the hash while loading. */
+function itemLabel(it: ItemInfo | undefined, id: `0x${string}`): string {
+  if (!it) return `${id.slice(0, 10)}…${id.slice(-6)}`
+  const memo = it.memo.trim() || '(no memo)'
+  return `${memo} · ${formatUsdc(it.amount)} USDC · cycle ${it.cycle.toString()}`
 }
 
 const CLAIM_LABELS: Record<string, string> = {
@@ -56,6 +71,25 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
     args: [address ?? '0x0000000000000000000000000000000000000000', NOTCH_CONTRACT.address],
     chainId: ARC_TESTNET_CHAIN_ID,
   })
+
+  // Pull each disputable charge's details so the picker shows what it is (memo, amount,
+  // cycle) instead of a bare hash. The statement's items are usually from a past cycle, so
+  // the parent can't hand them down — we read them from chain when the panel opens.
+  const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const [items, setItems] = useState<ItemInfo[]>([])
+  const itemIdsKey = itemIds.join(',')
+  useEffect(() => {
+    if (!open || !client || itemIds.length === 0) return
+    let cancelled = false
+    void Promise.all(
+      itemIds.map(id => client.readContract({ ...NOTCH_CONTRACT, functionName: 'getItem', args: [id] }))
+    ).then(res => { if (!cancelled) setItems(res as unknown as ItemInfo[]) }).catch(() => {})
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, client, itemIdsKey])
+
+  const itemsById = new Map(items.map(i => [i.itemId, i]))
+  const selectedInfo = itemsById.get(selectedItem)
 
   useEffect(() => {
     if (approveSuccess) {
@@ -112,22 +146,51 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
         Upheld → you keep the bond. Rejected → bond goes to the payee. Adjusted → bond split per ruling.
       </div>
 
-      {/* Item selector */}
-      {itemIds.length > 1 && (
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>
-            Disputed charge
-          </label>
+      {/* Item selector + what's being disputed */}
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>
+          Disputed charge
+        </label>
+        {itemIds.length > 1 && (
           <select
             value={selectedItem}
             onChange={e => setSelectedItem(e.target.value as `0x${string}`)}
           >
             {itemIds.map(id => (
-              <option key={id} value={id}>{id.slice(0, 10)}…{id.slice(-6)}</option>
+              <option key={id} value={id}>{itemLabel(itemsById.get(id), id)}</option>
             ))}
           </select>
+        )}
+
+        {/* Detail of the selected charge — so you know exactly what you're disputing */}
+        <div className="mt-2 rounded-lg px-3 py-2.5 text-xs" style={{ background: 'rgba(248,81,73,0.07)', lineHeight: '1.5' }}>
+          {selectedInfo ? (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-medium" style={{ color: 'var(--ink)' }}>{selectedInfo.memo.trim() || '(no memo)'}</span>
+                <span className="tabular font-semibold whitespace-nowrap" style={{ color: 'var(--ink)' }}>{formatUsdc(selectedInfo.amount)} USDC</span>
+              </div>
+              <div style={{ color: 'var(--subtle)' }}>Cycle {selectedInfo.cycle.toString()}</div>
+              {selectedInfo.evidenceUri && (
+                <a
+                  href={selectedInfo.evidenceUri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mono block mt-0.5"
+                  style={{ color: 'var(--accent)', wordBreak: 'break-all' }}
+                >
+                  {selectedInfo.evidenceUri.length > 48 ? selectedInfo.evidenceUri.slice(0, 48) + '…' : selectedInfo.evidenceUri}
+                </a>
+              )}
+              <div className="mono mt-1" style={{ color: 'var(--subtle)', fontSize: '0.65rem' }}>
+                {selectedItem.slice(0, 10)}…{selectedItem.slice(-6)}
+              </div>
+            </>
+          ) : (
+            <span style={{ color: 'var(--subtle)' }}>Loading charge details…</span>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Claim kind */}
       <div>

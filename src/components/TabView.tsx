@@ -16,6 +16,7 @@ import {
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import RecordChargeForm from './RecordChargeForm'
 import DisputePanel from './DisputePanel'
+import NotchLogo from './NotchLogo'
 
 interface Props {
   tabId: `0x${string}`
@@ -288,21 +289,12 @@ export default function TabView({ tabId, onBack }: Props) {
         <div className="space-y-3">
           <div className="relative overflow-hidden rounded-2xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             {/* Faded logo watermark in the background */}
-            <img
-              src="/notch-logo.svg"
-              alt=""
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                right: -12,
-                bottom: -8,
-                width: 72,
-                height: 108,
-                opacity: 0.06,
-                transform: 'rotate(12deg)',
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}
+            <NotchLogo
+              width={60}
+              height={122}
+              glow={false}
+              opacity={0.08}
+              style={{ position: 'absolute', right: -12, bottom: -8, transform: 'rotate(12deg)' }}
             />
 
             {/* ID + status */}

@@ -4,6 +4,7 @@ import { ConnectKitButton } from 'connectkit'
 import OpenTabForm from './OpenTabForm'
 import { formatAddress } from '../notch-contract'
 import { addStoredTabId } from '../tab-store'
+import NotchLogo from './NotchLogo'
 
 interface TabSummary {
   tabId: `0x${string}`
@@ -102,20 +103,9 @@ export default function CycleDashboard({ tabs, onSelect, onRefresh }: Props) {
             </p>
           </div>
 
-          {/* Logo — large, tilted, with drop shadow glow */}
+          {/* Logo — large, tilted render with drop shadow glow */}
           <div className="shrink-0 hidden sm:block" style={{ marginRight: 8 }}>
-            <img
-              src="/notch-logo.svg"
-              alt="Notch"
-              style={{
-                width: 72,
-                height: 108,
-                transform: 'rotate(8deg) translateY(-8px)',
-                filter:
-                  'drop-shadow(0 0 18px rgba(58,130,246,0.55)) drop-shadow(0 8px 24px rgba(0,0,0,0.6))',
-                opacity: 0.95,
-              }}
-            />
+            <NotchLogo width={64} height={132} rotate={8} style={{ transform: 'rotate(8deg) translateY(-8px)' }} />
           </div>
         </div>
       </div>
@@ -127,16 +117,7 @@ export default function CycleDashboard({ tabs, onSelect, onRefresh }: Props) {
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           {/* Big logo for empty state */}
-          <img
-            src="/notch-logo.svg"
-            alt="Notch"
-            style={{
-              width: 44,
-              height: 66,
-              opacity: 0.4,
-              filter: 'grayscale(60%)',
-            }}
-          />
+          <NotchLogo width={40} height={82} glow={false} grayscale opacity={0.5} />
           <div className="text-center">
             <p className="font-semibold mb-1" style={{ color: 'var(--ink)' }}>Connect your wallet</p>
             <p className="text-sm" style={{ color: 'var(--muted)' }}>to open or view clearing tabs</p>
