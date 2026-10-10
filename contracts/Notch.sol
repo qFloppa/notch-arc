@@ -433,7 +433,22 @@ contract Notch is Ownable, ReentrancyGuard {
             if (adjustment <= s.netAmount) {
                 s.netAmount -= adjustment;
             }
+        } else if (outcomeHash == OUTCOME_UPHELD) {
+            // CHANGED from the previous deployments (0x7c7c…, 0xeffe…): those had ONLY the
+            // `adjusted` branch above, so an `upheld` ruling moved no money — the claimant
+            // got their bond back but the disputed charge stayed in `netAmount`, and at
+            // settle time the payer still paid for a charge the win was supposed to excuse.
+            //
+            // This restores the semantics of the original GenLayer contract (contracts/
+            // notch.py, `_parse_verdict`), where the verdict amount is "what still stands":
+            // `upheld` pins it to 0 (claim fully valid — the payer owes nothing for this
+            // item), `rejected` leaves the full charge, `adjusted` is the reduced amount.
+            // Here `upheld` therefore removes the whole item from the statement's net.
+            if (item.amount <= s.netAmount) {
+                s.netAmount -= item.amount;
+            }
         }
+        // `rejected` (and an `adjusted` that didn't lower the amount) leave `netAmount` as billed.
 
         if (d.bondCredited) revert DuplicateDispute();
         d.bondCredited = true;

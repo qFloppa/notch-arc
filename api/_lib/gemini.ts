@@ -18,7 +18,7 @@ export interface DisputeContext {
 
 export interface Ruling {
   outcome: Outcome
-  revisedItemAmount: bigint  // in USDC 6-decimal units; equals chargeAmount for upheld/rejected
+  revisedItemAmount: bigint  // in USDC 6-decimal units; what still stands — 0 for upheld, full charge for rejected
   claimantBondAward: bigint  // how much of the 1 USDC bond to award the claimant
   evidenceHashMatched: boolean
   rationale: string
@@ -44,7 +44,7 @@ Rules:
 Always respond with ONLY valid JSON matching this schema:
 {
   "outcome": "upheld" | "adjusted" | "rejected",
-  "revisedItemAmountUsdc": number,  // float, e.g. 0.50 — must be <= original charge; use original if upheld/rejected
+  "revisedItemAmountUsdc": number,  // float, e.g. 0.50 — the amount that still stands; <= original charge. Only used for "adjusted" (upheld pins it to 0, rejected to the full charge).
   "claimantBondAwardUsdc": number,  // float — how much of the 1 USDC bond goes to claimant (0 to 1.0)
   "evidenceHashMatched": boolean,
   "rationale": string  // 1-3 sentence explanation
@@ -139,9 +139,15 @@ Return a JSON ruling.`
   }
   const outcome = parsed.outcome as Outcome
 
-  // Clamp and convert amounts
+  // Clamp and convert amounts. revisedItemAmount is "what still stands" on the charge,
+  // pinned by outcome exactly as the original GenLayer contract's _parse_verdict did:
+  //   upheld   -> 0            (claim fully valid; payer owes nothing for this item)
+  //   rejected -> full charge  (claim fails; the charge stands as billed)
+  //   adjusted -> model's number, clamped to [0, charge]
+  // The earlier port pinned upheld to the full charge, so a won dispute never excused it.
   const chargeUsdc = Number(ctx.chargeAmount) / 1_000_000
-  const revisedUsdc = Math.min(Math.max(0, parsed.revisedItemAmountUsdc ?? chargeUsdc), chargeUsdc)
+  const adjustedUsdc = Math.min(Math.max(0, parsed.revisedItemAmountUsdc ?? chargeUsdc), chargeUsdc)
+  const revisedUsdc = outcome === 'upheld' ? 0 : outcome === 'rejected' ? chargeUsdc : adjustedUsdc
   const bondUsdc = Math.min(Math.max(0, parsed.claimantBondAwardUsdc ?? 0), 1.0)
 
   const revisedItemAmount = BigInt(Math.round(revisedUsdc * 1_000_000))
