@@ -3,13 +3,12 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadCont
 import { erc20Abi } from 'viem'
 import { toast } from 'sonner'
 import {
-  NOTCH_CONTRACT,
   USDC_ADDRESS,
-  ARC_TESTNET_CHAIN_ID,
   CLAIM_KINDS,
   BOND_AMOUNT,
   formatUsdc,
 } from '../notch-contract'
+import { useNotch } from '../networks'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 
 interface Props {
@@ -51,7 +50,8 @@ const CLAIM_DEFAULTS: Record<string, string> = {
 
 
 export default function DisputePanel({ statementId, itemIds, onDisputed }: Props) {
-  const { address, chainId } = useAccount()
+  const { address } = useAccount()
+  const notch = useNotch()
   const [open, setOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<`0x${string}`>(itemIds[0] ?? '0x')
   const [claimKind, setClaimKind] = useState<string>(CLAIM_KINDS[0])
@@ -59,30 +59,30 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   const [step, setStep] = useState<'form' | 'dispute'>('form')
 
   const { writeContract: approveUsdc, data: approveTx, isPending: isApproving } = useWriteContract()
-  const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx })
+  const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx, chainId: notch.chainId })
 
   const { writeContract: openDispute, data: disputeTx, isPending: isDisputing } = useWriteContract()
-  const { isLoading: isDisputeConfirming, isSuccess: disputeSuccess, data: disputeReceipt } = useWaitForTransactionReceipt({ hash: disputeTx })
+  const { isLoading: isDisputeConfirming, isSuccess: disputeSuccess, data: disputeReceipt } = useWaitForTransactionReceipt({ hash: disputeTx, chainId: notch.chainId })
 
   const { data: allowance } = useReadContract({
     address: USDC_ADDRESS,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: [address ?? '0x0000000000000000000000000000000000000000', NOTCH_CONTRACT.address],
-    chainId: ARC_TESTNET_CHAIN_ID,
+    args: [address ?? '0x0000000000000000000000000000000000000000', notch.contract.address],
+    chainId: notch.chainId,
   })
 
   // Pull each disputable charge's details so the picker shows what it is (memo, amount,
   // cycle) instead of a bare hash. The statement's items are usually from a past cycle, so
   // the parent can't hand them down — we read them from chain when the panel opens.
-  const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const client = usePublicClient({ chainId: notch.chainId })
   const [items, setItems] = useState<ItemInfo[]>([])
   const itemIdsKey = itemIds.join(',')
   useEffect(() => {
     if (!open || !client || itemIds.length === 0) return
     let cancelled = false
     void Promise.all(
-      itemIds.map(id => client.readContract({ ...NOTCH_CONTRACT, functionName: 'getItem', args: [id] }))
+      itemIds.map(id => client.readContract({ ...notch.contract, functionName: 'getItem', args: [id] }))
     ).then(res => { if (!cancelled) setItems(res as unknown as ItemInfo[]) }).catch(() => {})
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,7 +102,7 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   useEffect(() => {
     if (!disputeSuccess || !disputeTx || !disputeReceipt) return
     toast.success('Dispute filed — the Gemini arbitrator will review', {
-      action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, disputeTx), '_blank') },
+      action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, disputeTx), '_blank') },
     })
     setOpen(false)
     setStep('form')
@@ -224,13 +224,13 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
         {!hasEnoughAllowance && step !== 'dispute' && (
           <button
             onClick={() => {
-              if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+              if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
               approveUsdc({
                 address: USDC_ADDRESS,
                 abi: erc20Abi,
                 functionName: 'approve',
-                args: [NOTCH_CONTRACT.address, BOND_AMOUNT],
-                chainId: ARC_TESTNET_CHAIN_ID,
+                args: [notch.contract.address, BOND_AMOUNT],
+                chainId: notch.chainId,
               })
             }}
             disabled={isApproving || isApproveConfirming}
@@ -244,13 +244,12 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
         {(hasEnoughAllowance || step === 'dispute') && (
           <button
             onClick={() => {
-              if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+              if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
               if (!claim.trim()) { toast.error('Describe your claim first.'); return }
               openDispute({
-                ...NOTCH_CONTRACT,
+                ...notch.contract,
                 functionName: 'openDispute',
                 args: [statementId, selectedItem, claimKind, claim],
-                chainId: ARC_TESTNET_CHAIN_ID,
               })
             }}
             disabled={isDisputing || isDisputeConfirming || !claim.trim()}

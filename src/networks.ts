@@ -9,6 +9,7 @@
  * DOM, a wallet, or Vite's env — see networks.test.ts.
  */
 
+import { useMemo } from 'react'
 import { useAccount } from 'wagmi'
 import { arc, arcTestnet } from 'viem/chains'
 import { requireChain } from '@/onchain-facts'
@@ -56,12 +57,15 @@ export function useNotch() {
   const chainId = resolveNetwork(walletChainId, window.location.hostname)
   // Non-null is sound: resolveNetwork only returns chains present in the map.
   const address = NOTCH_ADDRESSES[chainId]!
+  // Memoised so consumers can list `notch.contract` in a useEffect dependency array
+  // honestly. A fresh object each render would re-run those effects every render.
+  const contract = useMemo(() => ({ address, abi: artifact.abi, chainId }), [address, chainId])
   return {
     chainId,
     name: requireChain(chainId).name,
     isTestnet: chainId === ARC_TESTNET_ID,
     isWalletOnNetwork: walletChainId === chainId,
     /** Spread into any wagmi contract hook — address, abi and chainId travel together. */
-    contract: { address, abi: artifact.abi, chainId },
+    contract,
   }
 }

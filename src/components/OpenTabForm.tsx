@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 
 import { toast } from 'sonner'
-import { NOTCH_CONTRACT, ARC_TESTNET_CHAIN_ID } from '../notch-contract'
+import { useNotch } from '../networks'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import { addStoredTabId } from '../tab-store'
 
@@ -24,39 +24,40 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 
 export default function OpenTabForm({ onCreated }: Props) {
-  const { address, chainId } = useAccount()
+  const { address } = useAccount()
+  const notch = useNotch()
   const [payer, setPayer] = useState(address ?? '')
   const [payee, setPayee] = useState('')
   const [cycleDays, setCycleDays] = useState('1')
   const [open, setOpen] = useState(false)
 
   const { writeContract, data: hash, isPending, reset } = useWriteContract()
-  const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+  const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash, chainId: notch.chainId })
 
   // Parse tabId from receipt logs and store it — runs after confirmation
   useEffect(() => {
     if (!isSuccess || !receipt || !address) return
-    const CONTRACT_ADDR = NOTCH_CONTRACT.address.toLowerCase()
+    const CONTRACT_ADDR = notch.contract.address.toLowerCase()
     for (const log of receipt.logs) {
       // Only look at logs from our contract
       if (log.address.toLowerCase() !== CONTRACT_ADDR) continue
       // TabOpened: topics[0]=eventSig, topics[1]=tabId, topics[2]=creator, topics[3]=payer
       if (log.topics.length >= 2 && log.topics[1]) {
         const tabId = log.topics[1]
-        addStoredTabId(address, tabId)
+        addStoredTabId(notch.chainId, address, tabId)
         // Register under the payee too, so they see the tab when they connect in this
         // browser. Cross-device, the payee loads it with the "Paste a tab ID" field.
         const payeeAddr = payee.trim().toLowerCase()
         if (payeeAddr.startsWith('0x') && payeeAddr.length === 42 && payeeAddr !== address.toLowerCase()) {
-          addStoredTabId(payeeAddr, tabId)
+          addStoredTabId(notch.chainId, payeeAddr, tabId)
         }
         console.log('[notch] TabOpened — tabId stored:', tabId)
         break
       }
     }
     toast.success('Tab opened', {
-      description: 'New clearing tab is live on Arc Testnet.',
-      action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, hash!), '_blank') },
+      description: `New clearing tab is live on ${notch.name}.`,
+      action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, hash!), '_blank') },
     })
     reset()
     setOpen(false)
@@ -66,13 +67,12 @@ export default function OpenTabForm({ onCreated }: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+    if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
     const cycleSeconds = BigInt(Math.round(parseFloat(cycleDays) * 86400))
     writeContract({
-      ...NOTCH_CONTRACT,
+      ...notch.contract,
       functionName: 'openTab',
       args: [payer as `0x${string}`, payee as `0x${string}`, cycleSeconds],
-      chainId: ARC_TESTNET_CHAIN_ID,
     })
   }
 

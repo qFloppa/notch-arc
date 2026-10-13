@@ -3,18 +3,20 @@
  * Disputes are resolved automatically by the Gemini relayer (relayer/server.ts).
  */
 import { useReadContract } from 'wagmi'
-import { NOTCH_CONTRACT, ARC_TESTNET_CHAIN_ID, formatUsdc, formatAddress, formatTimestamp } from '../notch-contract'
+import { formatUsdc, formatAddress, formatTimestamp } from '../notch-contract'
+import { useNotch } from '../networks'
+import { buildAddressExplorerUrl } from '@/onchain-facts'
 
 interface Props {
   tabIds: `0x${string}`[]
 }
 
 function DisputeCard({ disputeId }: { disputeId: `0x${string}` }) {
+  const notch = useNotch()
   const { data: dispute } = useReadContract({
-    ...NOTCH_CONTRACT,
+    ...notch.contract,
     functionName: 'getDispute',
     args: [disputeId],
-    chainId: ARC_TESTNET_CHAIN_ID,
   })
 
   if (!dispute) return null
@@ -114,6 +116,7 @@ function DisputeCard({ disputeId }: { disputeId: `0x${string}` }) {
 }
 
 export default function RulingAdmin({ tabIds: _ }: Props) {
+  const notch = useNotch()
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -173,17 +176,17 @@ export default function RulingAdmin({ tabIds: _ }: Props) {
           <div>
             <p className="text-xs" style={{ color: 'var(--subtle)' }}>Address</p>
             <p className="mono text-sm break-all mt-1" style={{ color: 'var(--ink)' }}>
-              {NOTCH_CONTRACT.address}
+              {notch.contract.address}
             </p>
           </div>
           <a
-            href={`https://explorer.testnet.arc.io/address/${NOTCH_CONTRACT.address}`}
+            href={buildAddressExplorerUrl(notch.chainId, notch.contract.address)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs font-semibold"
             style={{ color: 'var(--accent)' }}
           >
-            View on Arc Testnet Explorer
+            {`View on ${notch.name} Explorer`}
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
               <path d="M2 9L9 2M9 2H4.5M9 2v4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>

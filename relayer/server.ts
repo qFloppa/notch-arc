@@ -7,13 +7,14 @@
  * proxy. The shared code lives under api/_lib — not here — because Vercel treats relayer/
  * as a separate package (own package.json) and won't bundle imports that cross into it.
  *
- * Discovery is push-only: the frontend POSTs { disputeId } here, both right after a
+ * Discovery is push-only: the frontend POSTs { disputeId, chainId } here, both right after a
  * DisputeOpened tx confirms and on every tab load for any dispute still Open. The
  * frontend already reads the chain, so it needs no help finding them — and that works
  * the same whether this process just restarted or is a cold serverless instance.
  */
 
-import { processDispute, health, arbitratorAddress, CONTRACT_ADDRESS, RPC_URL } from '../api/_lib/arbitrate.js'
+import { processDispute, health, arbitratorAddress } from '../api/_lib/arbitrate.js'
+import { RELAYER_CHAINS, resolveRelayerChain } from '../api/_lib/chains.js'
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
@@ -30,17 +31,24 @@ Bun.serve({
 
     // POST /dispute — frontend pushes a disputeId to be arbitrated
     if (req.method === 'POST' && url.pathname === '/dispute') {
-      let disputeId: string | undefined
+      let body: { disputeId?: unknown; chainId?: unknown }
       try {
-        disputeId = (await req.json() as { disputeId?: string }).disputeId
+        const parsed: unknown = await req.json()
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad request')
+        body = parsed as typeof body
       } catch {
         return new Response(JSON.stringify({ error: 'bad request' }), { status: 400, headers })
       }
-      if (!disputeId || !/^0x[0-9a-fA-F]{64}$/.test(disputeId)) {
+      const disputeId = body.disputeId
+      if (typeof disputeId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(disputeId)) {
         return new Response(JSON.stringify({ error: 'invalid disputeId' }), { status: 400, headers })
       }
-      console.log(`[relayer] Dispute pushed: ${disputeId}`)
-      const result = await processDispute(disputeId as `0x${string}`)
+      const chain = resolveRelayerChain(body.chainId)
+      if (!chain.ok) {
+        return new Response(JSON.stringify({ error: chain.error }), { status: 400, headers })
+      }
+      console.log(`[relayer] Dispute pushed: ${disputeId} on chain ${chain.chainId}`)
+      const result = await processDispute(disputeId as `0x${string}`, chain.chainId)
       return new Response(JSON.stringify(result), { status: result.ok ? 200 : 502, headers })
     }
 
@@ -50,6 +58,7 @@ Bun.serve({
 
 console.log(`[relayer] Notch arbitrator relayer starting`)
 console.log(`[relayer] Arbitrator: ${arbitratorAddress() ?? '(key not configured)'}`)
-console.log(`[relayer] Contract:   ${CONTRACT_ADDRESS}`)
-console.log(`[relayer] RPC:        ${RPC_URL}`)
+for (const cfg of Object.values(RELAYER_CHAINS)) {
+  console.log(`[relayer] ${cfg.label}: ${cfg.contract ?? '(not configured)'} via ${cfg.rpcUrl}`)
+}
 console.log(`[relayer] Status:     http://localhost:${PORT}/health`)

@@ -4,7 +4,7 @@
 >
 > **Execution method: NATIVE, chosen by the user on 2026-10-13.** Implement every task yourself in-session; do not dispatch per-task subagents. One fresh reviewer on the most capable model checks the whole branch at the end. Do not re-ask which execution method to use.
 >
-> **Status: no task started.** Branch `arc-mainnet`, working tree clean, nothing implemented. The spec and this plan are the only commits beyond `main`.
+> **Status (2026-10-14): Tasks 1–5 are implemented on `arc-mainnet`.** Task 1 was committed by Claude; the remaining frontend and relayer work was continued by Codex. Task 6 funding and deployment remain operator work. Browser and wallet testing was deferred by the user on 2026-10-14.
 
 **Goal:** Run Notch on Arc mainnet (chain 5042) alongside Arc Testnet, selected by an in-app network switcher that defaults to testnet.
 
@@ -13,6 +13,51 @@
 **Tech Stack:** React 18, Vite 6, TypeScript, wagmi 2.19.5, viem 2.56.8, ConnectKit, Tailwind, Sonner, Bun, Foundry.
 
 **Spec:** `docs/superpowers/specs/2026-10-12-arc-mainnet-design.md`
+
+## Continuation and verification record (2026-10-14)
+
+- Verified the inherited frontend migration and completed per-chain relayer routing,
+  clients, dedupe, retry state, health output, both HTTP entry points, and env examples.
+  Corrected the ignored local `relayer/.env` testnet address without committing secrets.
+- Network/account changes remount the page state so old tabs, statements, forms, and
+  transaction state cannot carry into another network. Receipt reads also specify chainId.
+  The header switcher remains visible on small screens and reports failed wallet switches.
+- Added regression checks for identical dispute IDs on different chains, failed push
+  retries, missing/empty mainnet config, chain-specific relayer state, legacy requests
+  without chainId, and invalid HTTP input. The frontend and API type checks and frontend
+  lint pass. All six self-checks, including the existing Gemini retry check, and the
+  production frontend build pass.
+- The full `bun run check` is blocked by existing setup issues: its lint script uses
+  shell syntax that this Windows Bun launcher rejects, and `scripts/compass-deploy.ts`
+  imports the unavailable `@circlefin/compass-chains` package (npm returns 404). Direct
+  `oxlint --type-aware src`, `oxlint .`, and a temporary TypeScript config including
+  `src` and `api` pass; no fake types or exclusions were added to the project config.
+- Local Vite serves HTTP 200. Relayer health lists both chains; missing mainnet config
+  returns HTTP 502 with its env-var name, and chain 1 returns HTTP 400. Tests use fixtures
+  and the HTTP smoke check uses an unreachable RPC URL, so no transactions were sent.
+- Foundry 1.7.1 compiled with Solc 0.8.28 successfully. `forge test` reports **no tests
+  found**: this checkout has no `contracts/test` files. Generated artifact changes were
+  restored after the compile check.
+- Browser runtime is unavailable in this session; the user chose to leave browser
+  testing for later. Task 4 Step 3 and the wallet flows in Task 6 remain manual checks.
+- README and AGENTS describe mainnet as pending. No deployment address was invented,
+  no funds were moved, and no remote environment variables were changed.
+- The required fresh reviewer found no Critical or Important migration issues and
+  assessed Tasks 1–5 as ready to commit. Browser/wallet behavior and deployed-mainnet
+  settlement/arbitration remain unverified, as recorded above.
+
+Current code checkpoints:
+
+- [x] Task 1: network resolution and wagmi configuration
+- [x] Task 2: chain-scoped tab storage
+- [x] Task 3: frontend contract, explorer, and write-guard migration
+- [x] Task 4: header network switcher implementation
+- [x] Task 5: per-chain relayer configuration and routing
+- [ ] Task 4 Step 3: connected-wallet/browser verification (deferred by user)
+- [ ] Task 6: operator funding, deployment, configuration, and mainnet end-to-end checks
+
+The step checkboxes below are the original handoff checklist and do not reconstruct
+Claude's historical red-test checkpoints. This record captures the verified final state.
 
 ## Global Constraints
 

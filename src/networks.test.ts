@@ -7,6 +7,7 @@
 
 import assert from 'node:assert'
 import { resolveNetwork, ARC_TESTNET_ID, ARC_MAINNET_ID } from './networks'
+import { getStoredTabIds, addStoredTabId } from './tab-store'
 
 const BOTH = {
   [ARC_TESTNET_ID]: '0x53F07375799558592Ea90344d14495D007C30f97',
@@ -42,5 +43,38 @@ for (const wallet of [undefined, 1, 999, ARC_TESTNET_ID, ARC_MAINNET_ID]) {
     }
   }
 }
+
+// ---- tab-store chain namespacing -------------------------------------------
+
+// Minimal localStorage stand-in — bun has no DOM. Safe to install here rather
+// than before the import: tab-store reads localStorage per call, not at load.
+const store = new Map<string, string>()
+;(globalThis as { localStorage?: unknown }).localStorage = {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => void store.set(k, v),
+}
+
+const WALLET = '0xAbCdEf0000000000000000000000000000000001'
+const TAB_A = '0xaa'.padEnd(66, 'a') as `0x${string}`
+const TAB_B = '0xbb'.padEnd(66, 'b') as `0x${string}`
+
+addStoredTabId(ARC_TESTNET_ID, WALLET, TAB_A)
+addStoredTabId(ARC_MAINNET_ID, WALLET, TAB_B)
+
+// One wallet, two chains, disjoint registries.
+assert.deepEqual(getStoredTabIds(ARC_TESTNET_ID, WALLET), [TAB_A])
+assert.deepEqual(getStoredTabIds(ARC_MAINNET_ID, WALLET), [TAB_B])
+
+// Case-insensitive on the address, as before.
+assert.deepEqual(getStoredTabIds(ARC_TESTNET_ID, WALLET.toLowerCase()), [TAB_A])
+
+// REVIEW FOCUS 5: a pre-existing un-namespaced key is not adopted by either chain.
+store.set(`notch:tabs:${WALLET.toLowerCase()}`, JSON.stringify(['0xdeadbeef']))
+assert.deepEqual(getStoredTabIds(ARC_TESTNET_ID, WALLET), [TAB_A])
+assert.deepEqual(getStoredTabIds(ARC_MAINNET_ID, WALLET), [TAB_B])
+
+// Corrupt JSON still degrades to empty rather than throwing.
+store.set(`notch:tabs:${ARC_TESTNET_ID}:${WALLET.toLowerCase()}`, '{not json')
+assert.deepEqual(getStoredTabIds(ARC_TESTNET_ID, WALLET), [])
 
 console.log('networks: all assertions passed')

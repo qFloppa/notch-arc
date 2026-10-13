@@ -1,6 +1,6 @@
 # Notch
 
-**A USDC clearing layer for agent-to-agent micropayments on Arc Testnet.**
+**A USDC clearing layer for agent-to-agent micropayments on Arc Testnet and Arc mainnet.**
 
 🔗 Live demo: https://arc.notch.bond
 
@@ -50,6 +50,25 @@ The dispute **bond** and the **bill** are independent: a won bond is credited ba
 | Dispute window | 3600 s |
 
 > An earlier deployment (`0xeffe…0938a`) is stale — on it a won dispute refunded the bond but didn't excuse the charge. Use the address above.
+
+## Networks
+
+The header switcher changes the connected wallet's chain. Contract reads, writes,
+receipts, explorer links, and dispute arbitration follow that network. Testnet
+(5042002) is the default; tabs are stored separately for each network and wallet.
+Existing tab IDs can be added with the dashboard's paste field on their original network.
+
+Arc mainnet (5042) uses real USDC, including a 1 USDC dispute bond and USDC gas.
+Mainnet deployment is pending, so its switcher option stays disabled until
+`VITE_NOTCH_ADDRESS_ARC` is set to a verified deployment address and the frontend
+is rebuilt. Set the same address in the relayer's `NOTCH_CONTRACT_ADDRESS_ARC`.
+`VITE_ARC_MAINNET_RPC_URL` and `ARC_MAINNET_RPC_URL` are optional RPC overrides for
+the frontend and relayer, respectively.
+
+An optional `mainnet.` hostname preselects mainnet when configured; a connected
+wallet on a configured Arc chain always takes priority. See the
+[deployment plan](docs/superpowers/plans/2026-10-13-arc-mainnet.md#task-6-deploy-to-arc-mainnet-and-document-it)
+for funding, deployment, and verification steps.
 
 ## Running locally
 
