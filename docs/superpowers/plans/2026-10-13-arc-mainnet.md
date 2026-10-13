@@ -1,6 +1,10 @@
 # Arc Mainnet Support Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Execution method: NATIVE, chosen by the user on 2026-10-13.** Implement every task yourself in-session; do not dispatch per-task subagents. One fresh reviewer on the most capable model checks the whole branch at the end. Do not re-ask which execution method to use.
+>
+> **Status: no task started.** Branch `arc-mainnet`, working tree clean, nothing implemented. The spec and this plan are the only commits beyond `main`.
 
 **Goal:** Run Notch on Arc mainnet (chain 5042) alongside Arc Testnet, selected by an in-app network switcher that defaults to testnet.
 
