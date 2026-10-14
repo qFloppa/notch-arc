@@ -22,7 +22,7 @@ Assumptions made here, not stated by the user:
 - The `mainnet.notch.bond` subdomain becomes an optional deep link that
   preselects mainnet, not a separate build. The switcher makes a second build
   unnecessary.
-- The dispute bond stays at 1 USDC on mainnet (see Deploy Runbook).
+- Updated on 2026-10-14: the mainnet owner can edit the dispute bond in the app (see Deploy Runbook).
 - No migration of existing `localStorage` tab registries.
 
 ## Success criteria
@@ -131,7 +131,8 @@ requires a switch.
 Call sites change from `{ ...NOTCH_CONTRACT, chainId: ARC_TESTNET_CHAIN_ID }`
 to `{ ...notch }`. `ARC_TESTNET_CHAIN_ID` and `NOTCH_CONTRACT` are **deleted**
 from `src/notch-contract.ts`, which keeps its formatters, status labels, claim
-kinds, `USDC_ADDRESS`, `BOND_AMOUNT`, and `pushDispute`.
+kinds, `USDC_ADDRESS`, and `pushDispute`. The bond follow-up reads `bondAmount()`
+from the active contract instead of keeping a fixed `BOND_AMOUNT` constant.
 
 The ABI stays a single import — one contract source, two deployments.
 
@@ -241,13 +242,13 @@ only works if testnet is *also* redeployed through the factory, and the live
 `0x53F0…` was not. Redeploying testnet would discard existing demo state to
 save one map entry.
 
-**Bond sizing — decided: 1 USDC on both networks.** `BOND_AMOUNT`
-(`src/notch-contract.ts:17`) is a constructor argument, so mainnet could
-differ. It stays 1 USDC. That is real money per dispute, but a dust bond makes
-the dispute mechanic — the entire point of the demo — meaningless. Because the
-value is identical on both networks, `BOND_AMOUNT` stays a single constant and
-does **not** become a per-network map. Choosing a different mainnet bond later
-means making it per-network, which is a small follow-up, not part of this work.
+**Bond sizing — updated by user request on 2026-10-14.** The deployment example
+starts at 1 USDC, and the mainnet contract owner can change it through the app's
+Arbitrator view using the existing `setBondAmount` function. Only positive amounts
+with up to six decimal places are accepted. The dispute form reads the active
+contract's current bond and rechecks it and the allowance before signing. Changes
+apply to new disputes; arbitration uses the bond recorded on each existing dispute.
+The frontend has no fixed bond constant or per-network bond map.
 
 ## Testing
 

@@ -8,9 +8,6 @@
 
 export const USDC_ADDRESS = '0x3600000000000000000000000000000000000000' as `0x${string}`
 
-/** 1 USDC in 6-decimal units — the dispute bond amount */
-export const BOND_AMOUNT = 1_000_000n
-
 export type StatementStatus = 'Open' | 'Accepted' | 'Disputed' | 'Resolved' | 'Settled'
 export type DisputeStatus = 'Pending' | 'Resolved'
 

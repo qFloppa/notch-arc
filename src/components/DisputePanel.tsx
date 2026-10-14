@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
 import { erc20Abi } from 'viem'
 import { toast } from 'sonner'
 import {
   USDC_ADDRESS,
   CLAIM_KINDS,
-  BOND_AMOUNT,
   formatUsdc,
 } from '../notch-contract'
 import { useNotch } from '../networks'
@@ -56,20 +55,33 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   const [selectedItem, setSelectedItem] = useState<`0x${string}`>(itemIds[0] ?? '0x')
   const [claimKind, setClaimKind] = useState<string>(CLAIM_KINDS[0])
   const [claim, setClaim] = useState<string>(CLAIM_DEFAULTS[CLAIM_KINDS[0]] ?? '')
-  const [step, setStep] = useState<'form' | 'dispute'>('form')
+  const [isChecking, setIsChecking] = useState(false)
+  const active = useRef(true)
+  useEffect(() => {
+    active.current = true
+    return () => { active.current = false }
+  }, [])
 
-  const { writeContract: approveUsdc, data: approveTx, isPending: isApproving } = useWriteContract()
-  const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx, chainId: notch.chainId })
+  const { writeContract: approveUsdc, data: approveTx, isPending: isApproving, error: approveError } = useWriteContract()
+  const { isLoading: isApproveConfirming, isSuccess: approveSuccess, data: approveReceipt, error: approveReceiptError } = useWaitForTransactionReceipt({ hash: approveTx, chainId: notch.chainId })
 
-  const { writeContract: openDispute, data: disputeTx, isPending: isDisputing } = useWriteContract()
-  const { isLoading: isDisputeConfirming, isSuccess: disputeSuccess, data: disputeReceipt } = useWaitForTransactionReceipt({ hash: disputeTx, chainId: notch.chainId })
+  const { writeContract: openDispute, data: disputeTx, isPending: isDisputing, error: disputeError } = useWriteContract()
+  const { isLoading: isDisputeConfirming, isSuccess: disputeSuccess, data: disputeReceipt, error: disputeReceiptError } = useWaitForTransactionReceipt({ hash: disputeTx, chainId: notch.chainId })
 
-  const { data: allowance } = useReadContract({
+  const { data: bondRaw, isError: bondError, isFetching: bondFetching, refetch: refetchBond } = useReadContract({
+    ...notch.contract,
+    functionName: 'bondAmount',
+    query: { enabled: open, refetchInterval: 10_000 },
+  })
+  const bondAmount = typeof bondRaw === 'bigint' && bondRaw > 0n ? bondRaw : undefined
+
+  const { data: allowance, isError: allowanceError, isFetching: allowanceFetching, refetch: refetchAllowance } = useReadContract({
     address: USDC_ADDRESS,
     abi: erc20Abi,
     functionName: 'allowance',
     args: [address ?? '0x0000000000000000000000000000000000000000', notch.contract.address],
     chainId: notch.chainId,
+    query: { enabled: open && !!address, refetchInterval: 10_000 },
   })
 
   // Pull each disputable charge's details so the picker shows what it is (memo, amount,
@@ -92,20 +104,20 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   const selectedInfo = itemsById.get(selectedItem)
 
   useEffect(() => {
-    if (approveSuccess) {
-      toast.success('Bond approved — submit the dispute now')
-      setStep('dispute')
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approveSuccess])
+    if (!approveSuccess || !approveReceipt) return
+    if (approveReceipt.status === 'reverted') { toast.error('Bond approval reverted.'); return }
+    toast.success('Bond approval confirmed')
+    void refetchAllowance()
+    void refetchBond()
+  }, [approveSuccess, approveReceipt, refetchAllowance, refetchBond])
 
   useEffect(() => {
     if (!disputeSuccess || !disputeTx || !disputeReceipt) return
+    if (disputeReceipt.status === 'reverted') { toast.error('Dispute transaction reverted.'); return }
     toast.success('Dispute filed — the Gemini arbitrator will review', {
       action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, disputeTx), '_blank') },
     })
     setOpen(false)
-    setStep('form')
     setClaim('')
     // TabView reads the new Disputed statement from chain and pushes it to the relayer;
     // this just tells it to refresh now so the dispute card appears without a reload.
@@ -113,7 +125,52 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeSuccess, disputeTx, disputeReceipt])
 
-  const hasEnoughAllowance = (allowance ?? 0n) >= BOND_AMOUNT
+  const readsReady = bondAmount !== undefined && allowance !== undefined && !bondError && !allowanceError
+  // Exact approval caps the amount collected if the owner raises the bond while
+  // the wallet confirmation is open. A larger old allowance must be lowered first.
+  const hasBondApproval = readsReady && allowance === bondAmount
+  const busy = isChecking || isApproving || isApproveConfirming || isDisputing || isDisputeConfirming
+
+  // Recheck immediately before signing. A higher bond after approval must return to
+  // the approval step; a changed amount must be shown before the user proceeds.
+  async function submitBondAction(action: 'approve' | 'dispute') {
+    if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
+    if (!readsReady || busy) return
+    if (action === 'dispute' && !claim.trim()) { toast.error('Describe your claim first.'); return }
+    setIsChecking(true)
+    try {
+      const [bondResult, allowanceResult] = await Promise.all([refetchBond(), refetchAllowance()])
+      if (!active.current) return
+      const currentBond = bondResult.data
+      const currentAllowance = allowanceResult.data
+      if (bondResult.isError || allowanceResult.isError || typeof currentBond !== 'bigint' || currentBond <= 0n || currentAllowance === undefined) {
+        toast.error('Could not read the current bond and allowance. Try again.')
+        return
+      }
+      if (currentBond !== bondAmount) {
+        toast.info(`The bond is now ${formatUsdc(currentBond)} USDC. Review the amount and try again.`)
+        return
+      }
+      const onError = (error: Error) => toast.error(error.message.split('\n')[0])
+      if (action === 'approve') {
+        if (currentAllowance === currentBond) return
+        approveUsdc({
+          address: USDC_ADDRESS, abi: erc20Abi, functionName: 'approve',
+          args: [notch.contract.address, currentBond], chainId: notch.chainId,
+        }, { onError })
+      } else {
+        if (currentAllowance !== currentBond) { toast.error('Approve the current bond amount before filing.'); return }
+        openDispute({
+          ...notch.contract, functionName: 'openDispute',
+          args: [statementId, selectedItem, claimKind, claim],
+        }, { onError })
+      }
+    } catch {
+      if (active.current) toast.error('Could not check the bond. Try again.')
+    } finally {
+      if (active.current) setIsChecking(false)
+    }
+  }
 
   if (!open) {
     return (
@@ -142,8 +199,11 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
 
       {/* Bond notice */}
       <div className="rounded-lg p-3 text-xs" style={{ background: 'rgba(248,81,73,0.07)', color: 'var(--ink-2)', lineHeight: '1.5' }}>
-        Disputes require a <span className="font-semibold" style={{ color: 'var(--danger)' }}>{formatUsdc(BOND_AMOUNT)} USDC bond</span>.
-        Upheld → you keep the bond. Rejected → bond goes to the payee. Adjusted → bond split per ruling.
+        {bondError ? 'Current bond unavailable.' : bondAmount === undefined ? 'Loading the current dispute bond…' : (
+          <>Disputes require a <span className="font-semibold" style={{ color: 'var(--danger)' }}>{formatUsdc(bondAmount)} USDC bond</span>.</>
+        )}
+        {' '}Upheld → you keep the bond. Rejected → bond goes to the payee. Adjusted → bond split per ruling.
+        {' '}Approval is limited to the current bond amount.
       </div>
 
       {/* Item selector + what's being disputed */}
@@ -221,42 +281,40 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
 
       {/* Actions */}
       <div className="space-y-2">
-        {!hasEnoughAllowance && step !== 'dispute' && (
+        {(bondError || allowanceError) && (
+          <p role="alert" className="text-xs" style={{ color: 'var(--danger)' }}>
+            Could not load the current bond and USDC allowance.{' '}
+            <button onClick={() => { void refetchBond(); void refetchAllowance() }} className="underline">Retry</button>
+          </p>
+        )}
+        {[
+          { label: 'Bond approval', error: approveError ?? approveReceiptError, tx: approveTx },
+          { label: 'Dispute', error: disputeError ?? disputeReceiptError, tx: disputeTx },
+        ].map(({ label, error, tx }) => error && (
+          <p key={label} role="alert" className="text-xs" style={{ color: 'var(--danger)' }}>
+            {label}: {error.message.split('\n')[0]}
+            {tx && <>{' '}<a href={buildTxExplorerUrl(notch.chainId, tx)} target="_blank" rel="noopener noreferrer" className="underline">View transaction</a></>}
+          </p>
+        ))}
+        {!hasBondApproval && (
           <button
-            onClick={() => {
-              if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
-              approveUsdc({
-                address: USDC_ADDRESS,
-                abi: erc20Abi,
-                functionName: 'approve',
-                args: [notch.contract.address, BOND_AMOUNT],
-                chainId: notch.chainId,
-              })
-            }}
-            disabled={isApproving || isApproveConfirming}
+            onClick={() => { void submitBondAction('approve') }}
+            disabled={!readsReady || busy || bondFetching || allowanceFetching || !notch.isWalletOnNetwork}
             className="w-full py-2.5 rounded-lg font-semibold text-sm disabled:opacity-40"
             style={{ background: 'var(--surface-3)', color: 'var(--ink)', border: '1px solid var(--border-2)' }}
           >
-            {isApproving ? 'Confirm in wallet…' : isApproveConfirming ? 'Approving…' : `Step 1 — Approve ${formatUsdc(BOND_AMOUNT)} USDC Bond`}
+            {isChecking ? 'Checking bond…' : isApproving ? 'Confirm in wallet…' : isApproveConfirming ? 'Approving…' : bondAmount === undefined ? 'Waiting for bond amount…' : `Step 1 — Approve ${formatUsdc(bondAmount)} USDC Bond`}
           </button>
         )}
 
-        {(hasEnoughAllowance || step === 'dispute') && (
+        {hasBondApproval && (
           <button
-            onClick={() => {
-              if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
-              if (!claim.trim()) { toast.error('Describe your claim first.'); return }
-              openDispute({
-                ...notch.contract,
-                functionName: 'openDispute',
-                args: [statementId, selectedItem, claimKind, claim],
-              })
-            }}
-            disabled={isDisputing || isDisputeConfirming || !claim.trim()}
+            onClick={() => { void submitBondAction('dispute') }}
+            disabled={busy || bondFetching || allowanceFetching || !notch.isWalletOnNetwork || !claim.trim()}
             className="w-full py-2.5 rounded-lg font-semibold text-sm text-white disabled:opacity-40"
             style={{ background: 'var(--danger)' }}
           >
-            {isDisputing ? 'Confirm in wallet…' : isDisputeConfirming ? 'Filing…' : 'File Dispute'}
+            {isChecking ? 'Checking bond…' : isDisputing ? 'Confirm in wallet…' : isDisputeConfirming ? 'Filing…' : 'File Dispute'}
           </button>
         )}
       </div>

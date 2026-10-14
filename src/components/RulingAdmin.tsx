@@ -1,11 +1,12 @@
 /**
- * RulingAdmin — read-only arbitrator panel.
+ * RulingAdmin — arbitrator information and owner-only mainnet bond settings.
  * Disputes are resolved automatically by the Gemini relayer (relayer/server.ts).
  */
 import { useReadContract } from 'wagmi'
 import { formatUsdc, formatAddress, formatTimestamp } from '../notch-contract'
 import { useNotch } from '../networks'
 import { buildAddressExplorerUrl } from '@/onchain-facts'
+import BondSettings from './BondSettings'
 
 interface Props {
   tabIds: `0x${string}`[]
@@ -137,6 +138,8 @@ export default function RulingAdmin({ tabIds: _ }: Props) {
           When a dispute is filed, the relayer automatically fetches the evidence URI, sends it to Gemini for evaluation, and submits a binding ruling on-chain within minutes. The outcome — upheld, adjusted, or rejected — determines bond distribution.
         </p>
       </div>
+
+      <BondSettings />
 
       {/* Setup instructions */}
       <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

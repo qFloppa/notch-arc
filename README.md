@@ -26,7 +26,7 @@ Notch addresses both:
 1. **Open a tab** between a payer and a payee with a cycle length.
 2. **Record charges** — amount, memo (the agreed service), and an evidence URI whose keccak256 hash is committed on-chain.
 3. **Close the cycle** (only once the cycle window has elapsed) → a **statement** with the netted total and a hash of all line items.
-4. **Accept or dispute** — the payee accepts, or the payer disputes a charge by posting a **1 USDC bond** with a claim (not delivered, off-spec, overcharged, duplicate, SLA breach).
+4. **Accept or dispute** — the payee accepts, or the payer disputes a charge by posting the **current on-chain USDC bond** with a claim (not delivered, off-spec, overcharged, duplicate, SLA breach).
 5. **Arbitrate** — the Gemini relayer fetches the evidence, checks the hash, and submits a ruling on-chain: `upheld` (charge excused), `adjusted` (charge reduced), or `rejected` (charge stands). The bond is credited to whoever was right.
 6. **Settle** — the payer approves USDC and pays the net amount to the payee.
 
@@ -58,7 +58,8 @@ receipts, explorer links, and dispute arbitration follow that network. Testnet
 (5042002) is the default; tabs are stored separately for each network and wallet.
 Existing tab IDs can be added with the dashboard's paste field on their original network.
 
-Arc mainnet (5042) uses real USDC, including a 1 USDC dispute bond and USDC gas.
+Arc mainnet (5042) uses real USDC for dispute bonds and gas. The deployment example
+starts with a 1 USDC bond, which the contract owner can change in the app.
 Mainnet deployment is pending, so its switcher option stays disabled until
 `VITE_NOTCH_ADDRESS_ARC` is set to a verified deployment address and the frontend
 is rebuilt. Set the same address in the relayer's `NOTCH_CONTRACT_ADDRESS_ARC`.
@@ -69,6 +70,19 @@ An optional `mainnet.` hostname preselects mainnet when configured; a connected
 wallet on a configured Arc chain always takes priority. See the
 [deployment plan](docs/superpowers/plans/2026-10-13-arc-mainnet.md#task-6-deploy-to-arc-mainnet-and-document-it)
 for funding, deployment, and verification steps.
+
+### Mainnet bond settings
+
+Once mainnet is deployed and configured, switch to Arc mainnet and connect the
+contract owner's wallet. Open **Arbitrator → Mainnet dispute bond**, enter a positive
+USDC amount with up to six decimal places, and confirm **Update bond amount** in
+your wallet. The control uses the contract's existing owner-only `setBondAmount`.
+
+Changes affect new disputes. Existing disputes keep their recorded bond, which the
+Gemini relayer uses when awarding it. The dispute form reads the current bond from
+the active network and rechecks it and your allowance before requesting a signature.
+Approval is set to the exact bond, including lowering an older allowance, so a
+bond increase while your wallet confirmation is open cannot collect extra USDC.
 
 ## Running locally
 
@@ -91,6 +105,8 @@ bun run dev           # :3001 — the Vite dev server proxies /relayer → :3001
 ```
 
 The `ARBITRATOR_PRIVATE_KEY` wallet must be the contract's `arbitrator`, or `submitRuling` reverts.
+The mainnet constructor's `owner` must be a wallet you can connect in the app to
+manage the bond; it may be different from the arbitrator.
 
 ### Contracts
 

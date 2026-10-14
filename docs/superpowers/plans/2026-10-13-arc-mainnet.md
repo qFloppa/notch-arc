@@ -46,6 +46,31 @@
   assessed Tasks 1–5 as ready to commit. Browser/wallet behavior and deployed-mainnet
   settlement/arbitration remain unverified, as recorded above.
 
+### Bond configuration follow-up (2026-10-14)
+
+- The user requested a modifiable mainnet bond and chose an owner-only control in
+  the app. `BondSettings` appears in the mainnet Arbitrator view for the connected
+  contract owner. It validates positive six-decimal USDC amounts and calls the
+  existing `setBondAmount`; no Solidity changes or redeployment of testnet.
+- Dispute forms read the current bond and allowance on the active network, recheck
+  both before signing, and stop for review if the bond changed. Approval must equal
+  the current bond, so an older larger allowance is lowered before filing. A bond
+  increase during wallet confirmation cannot collect more through this app flow.
+  Write and receipt failures are visible with transaction explorer links.
+- Gemini receives each dispute's recorded bond and clamps claimant awards to that
+  exact amount, including bonds above or below 1 USDC. Changing the global bond
+  affects only new disputes.
+- All ten self-checks pass: the six migration checks plus `src/bond.test.ts`,
+  `src/components/BondSettings.test.ts`, `api/_lib/gemini.bond.test.ts`, and
+  `api/_lib/arbitrate.bond.test.ts`. The rendering check uses real wagmi hooks and
+  fixture wallet/query state without a browser. RPC and Gemini checks use mocks.
+- Final production build, `oxlint --type-aware src`, `oxlint .`, the temporary
+  `src`/`api` TypeScript check, and `git diff --check` pass. The previously recorded
+  full-check blockers and deferred browser/wallet testing still apply. Mainnet
+  deployment and actual owner transactions remain pending.
+- Reviewer found no remaining material issues after verifying exact-allowance
+  handling and visible wagmi receipt/write errors; the follow-up is ready to commit.
+
 Current code checkpoints:
 
 - [x] Task 1: network resolution and wagmi configuration
@@ -64,7 +89,7 @@ Claude's historical red-test checkpoints. This record captures the verified fina
 - Chain IDs: Arc Testnet `5042002` (`arcTestnet` from `viem/chains`), Arc mainnet `5042` (`arc` from `viem/chains`). Never hardcode the numbers where the viem export is available.
 - **Naming hazard:** `mainnet` imported in `src/config.ts` is **Ethereum** (chain 1), present only for ENS resolution. Arc mainnet is `arc`. No identifier may use a bare "mainnet" to mean Arc — use `ARC_MAINNET_ID` / `arc`.
 - USDC is at `0x3600000000000000000000000000000000000000` with `decimals() = 6` on **both** Arc networks. `USDC_ADDRESS` stays a single constant.
-- `BOND_AMOUNT` stays a single `1_000_000n` constant (1 USDC) on both networks. Do **not** make it per-network.
+- **Updated by user request on 2026-10-14:** the mainnet bond is editable by the contract owner in the app. Read `bondAmount()` from the active contract for dispute approvals; arbitration uses the bond stored on each dispute. No fixed frontend bond constant or per-network bond map. The deployment example starts at 1 USDC.
 - Testnet is the default network everywhere except the `mainnet.` hostname.
 - Tests use no framework: `node:assert` + a `bun <file>` entry point, matching `api/_lib/gemini.retry.test.ts`.
 - Verification commands: `bun run check` (lint + typecheck), `bun run typecheck`, `bun <testfile>`, `bun run contracts:test`.
@@ -608,7 +633,7 @@ Replace the two network-named strings:
 
 - [ ] **Step 4: Delete the old exports**
 
-In `src/notch-contract.ts`, delete lines 5-12 — the artifact import, the `NOTCH_CONTRACT` object, and `ARC_TESTNET_CHAIN_ID`. Keep `USDC_ADDRESS`, `BOND_AMOUNT`, the status/claim types and labels, the formatters, and `pushDispute`. Update the file's header comment, which currently names one testnet address, to say that per-network addresses now live in `networks.ts`.
+In `src/notch-contract.ts`, delete lines 5-12 — the artifact import, the `NOTCH_CONTRACT` object, and `ARC_TESTNET_CHAIN_ID`. Keep `USDC_ADDRESS`, the status/claim types and labels, the formatters, and `pushDispute`. The 2026-10-14 bond follow-up also removes `BOND_AMOUNT` in favor of an on-chain read. Update the file's header comment, which currently names one testnet address, to say that per-network addresses now live in `networks.ts`.
 
 - [ ] **Step 5: Verify nothing references the deleted exports**
 
@@ -1216,10 +1241,16 @@ Arc's native gas currency is USDC at 18 decimals; the ERC-20 at
 `0x3600000000000000000000000000000000000000` is 6 decimals. Fund:
 
 - the **deployer** — enough for one contract creation;
-- the **arbitrator** (`0x5B12Ce46C7194aD57d143bC22847224047b1Ef42`, or the
-  wallet behind `ARBITRATOR_PRIVATE_KEY`) — enough for ongoing `submitRuling`
+- the **arbitrator** (the wallet behind `ARBITRATOR_PRIVATE_KEY`; the locally
+  configured public address verified on 2026-10-14 is
+  `0xE849DDC0fa5b31b7aAEB4a9186DB96A144Cf9Cf2`) — enough for ongoing `submitRuling`
   transactions. Easy to forget, and without it a mainnet dispute sits `Pending`
   with no visible error.
+
+The deployer and arbitrator may be the same wallet. Choose `OWNER_ADDRESS` as a
+wallet you can connect in the app; it needs USDC gas for bond updates. Recheck the
+arbitrator address against the actual relayer key before deployment. The old
+platform deployer in the testnet constructor is not the currently configured relayer.
 
 Verify: `cast balance <addr> --rpc-url https://rpc.mainnet.arc.io`
 
@@ -1231,14 +1262,16 @@ forge create contracts/Notch.sol:Notch \
   --private-key $DEPLOYER_PRIVATE_KEY \
   --constructor-args \
     0x3600000000000000000000000000000000000000 \
-    0x5B12Ce46C7194aD57d143bC22847224047b1Ef42 \
-    0x5B12Ce46C7194aD57d143bC22847224047b1Ef42 \
+    $ARBITRATOR_ADDRESS \
+    $OWNER_ADDRESS \
     1000000 \
     3600
 ```
 
-Args in order: USDC, arbitrator, owner, bond amount (1 USDC at 6 decimals — keep
-this value, per the Global Constraints), dispute window in seconds.
+Set `ARBITRATOR_ADDRESS` to the public address of the relayer wallet and
+`OWNER_ADDRESS` to the wallet that will manage bond settings. Args in order: USDC,
+arbitrator, owner, initial bond amount (the example uses 1 USDC at 6 decimals),
+dispute window in seconds. The owner can change the bond later in the app.
 
 CREATE2 is deliberately not used: `contracts/script/DeployCreate2.s.sol` could give
 one address on both chains, but only if testnet were also redeployed through the
@@ -1248,10 +1281,12 @@ factory, discarding the live demo state to save one map entry.
 
 ```bash
 cast call <DEPLOYED> "arbitrator()(address)" --rpc-url https://rpc.mainnet.arc.io
+cast call <DEPLOYED> "owner()(address)" --rpc-url https://rpc.mainnet.arc.io
 cast call <DEPLOYED> "bondAmount()(uint256)" --rpc-url https://rpc.mainnet.arc.io
 cast call <DEPLOYED> "usdc()(address)" --rpc-url https://rpc.mainnet.arc.io
 ```
-Expected: the arbitrator wallet, `1000000`, and `0x3600…0000`. A wrong arbitrator
+Expected: the arbitrator wallet, the chosen owner wallet, `1000000` (or the selected
+initial bond), and `0x3600…0000`. A wrong arbitrator
 means the relayer can never submit a ruling.
 
 - [ ] **Step 4: Set the environment variables**
@@ -1287,6 +1322,13 @@ testnet is the default, and mainnet moves real USDC.
 4. Open one dispute; confirm the Gemini ruling lands on the mainnet contract.
 5. Confirm explorer links resolve to `explorer.arc.io`, not the testnet explorer.
 6. Switch back to Testnet; confirm the original testnet tabs are still listed.
+7. On mainnet, connect the contract owner and open Arbitrator → Mainnet dispute
+   bond. Verify a non-owner cannot see the editor, zero and excess decimal places
+   cannot be submitted, and a valid update confirms and refreshes the current bond.
+8. Open disputes with bonds below and above 1 USDC; verify exact approvals and
+   correct Gemini awards. Change the global bond while an older dispute is pending;
+   verify that older dispute retains its original bond. Change the bond between
+   approval and filing; verify the displayed amount is refreshed and requires review.
 
 - [ ] **Step 7: Commit**
 

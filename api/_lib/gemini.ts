@@ -5,6 +5,8 @@
  * evidence content) and returns a validated ruling.
  */
 
+import { formatUnits } from 'viem'
+
 export type Outcome = 'upheld' | 'adjusted' | 'rejected'
 
 export interface DisputeContext {
@@ -14,12 +16,13 @@ export interface DisputeContext {
   evidenceUri: string
   evidenceContent: string | null  // fetched text content of evidence, or null if unreachable
   chargeAmount: bigint  // original item amount in USDC 6-decimal units
+  bondAmount: bigint    // bond recorded when this dispute opened, in USDC 6-decimal units
 }
 
 export interface Ruling {
   outcome: Outcome
   revisedItemAmount: bigint  // in USDC 6-decimal units; what still stands — 0 for upheld, full charge for rejected
-  claimantBondAward: bigint  // how much of the 1 USDC bond to award the claimant
+  claimantBondAward: bigint  // how much of this dispute's recorded bond to award the claimant
   evidenceHashMatched: boolean
   rationale: string
 }
@@ -45,7 +48,7 @@ Always respond with ONLY valid JSON matching this schema:
 {
   "outcome": "upheld" | "adjusted" | "rejected",
   "revisedItemAmountUsdc": number,  // float, e.g. 0.50 — the amount that still stands; <= original charge. Only used for "adjusted" (upheld pins it to 0, rejected to the full charge).
-  "claimantBondAwardUsdc": number,  // float — how much of the 1 USDC bond goes to claimant (0 to 1.0)
+  "claimantBondAwardUsdc": number,  // float — how much of the dispute bond goes to claimant, from 0 up to the Dispute bond amount supplied below
   "evidenceHashMatched": boolean,
   "rationale": string  // 1-3 sentence explanation
 }`
@@ -57,6 +60,7 @@ Dispute Details:
 - Payer's claim: ${ctx.claim}
 - Agreed service (memo): ${ctx.memo}
 - Original charge: ${(Number(ctx.chargeAmount) / 1_000_000).toFixed(6)} USDC
+- Dispute bond: ${formatUnits(ctx.bondAmount, 6)} USDC
 - Evidence URI: ${ctx.evidenceUri || '(none provided)'}
 - Evidence content: ${ctx.evidenceContent ? ctx.evidenceContent.slice(0, 3000) : '(unreachable or not provided)'}
 
@@ -148,10 +152,21 @@ Return a JSON ruling.`
   const chargeUsdc = Number(ctx.chargeAmount) / 1_000_000
   const adjustedUsdc = Math.min(Math.max(0, parsed.revisedItemAmountUsdc ?? chargeUsdc), chargeUsdc)
   const revisedUsdc = outcome === 'upheld' ? 0 : outcome === 'rejected' ? chargeUsdc : adjustedUsdc
-  const bondUsdc = Math.min(Math.max(0, parsed.claimantBondAwardUsdc ?? 0), 1.0)
+  const bondAwardUsdc = parsed.claimantBondAwardUsdc ?? 0
+  if (typeof bondAwardUsdc !== 'number' || !Number.isFinite(bondAwardUsdc)) {
+    throw new Error('Invalid claimant bond award from Gemini')
+  }
 
   const revisedItemAmount = BigInt(Math.round(revisedUsdc * 1_000_000))
-  const claimantBondAward = BigInt(Math.round(bondUsdc * 1_000_000))
+  // Clamp before conversion to handle very large model values, then clamp in integer
+  // units as well so rounding can never exceed the exact bond stored on-chain.
+  let claimantBondAward = 0n
+  if (bondAwardUsdc >= Number(ctx.bondAmount) / 1_000_000) {
+    claimantBondAward = ctx.bondAmount
+  } else if (bondAwardUsdc > 0) {
+    const units = BigInt(Math.round(bondAwardUsdc * 1_000_000))
+    claimantBondAward = units > ctx.bondAmount ? ctx.bondAmount : units
+  }
 
   return {
     outcome,

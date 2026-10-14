@@ -218,6 +218,7 @@ export async function processDispute(disputeId: `0x${string}`, chainId: number):
         evidenceUri: item.evidenceUri,
         evidenceContent,
         chargeAmount: item.amount,
+        bondAmount: dispute.bondAmount,
       },
       GEMINI_API_KEY!
     )

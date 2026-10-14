@@ -17,6 +17,13 @@ is configured. Set the matching relayer `NOTCH_CONTRACT_ADDRESS_ARC` after verif
 the deployment. The funding and deployment runbook is in
 `docs/superpowers/plans/2026-10-13-arc-mainnet.md`, Task 6.
 
+Mainnet has an owner-only bond editor in the Arbitrator view. It uses the existing
+`setBondAmount(uint256)` function and accepts positive USDC amounts with up to six
+decimal places. Changes apply to new disputes; existing disputes keep their recorded
+bond. Dispute approvals read `bondAmount()` on the active chain, and the Gemini
+relayer awards against each dispute's stored bond. There is no fixed frontend bond
+constant. Choose a mainnet owner wallet that can be connected in the app.
+
 ## Deployed Contracts
 
 | Contract | Network | Address | Explorer |
@@ -39,7 +46,7 @@ the deployment. The funding and deployment runbook is in
 - Contracts: Solidity 0.8.28 + Foundry. Sources in `contracts/`, unit tests in `contracts/test/*.t.sol`. Build with `bun run contracts:build` (`forge build`), test with `bun run contracts:test` (`forge test`).
 - Wallet: injected (MetaMask, etc.)
 - Chains: Arc Testnet (5042002, `arcTestnet`) and Arc mainnet (5042, `arc`), imported from `viem/chains`; selected with the header wallet-network switcher
-- Token: USDC (6 decimals) (Address: 0x3600000000000000000000000000000000000000 on both Arc networks); bond amount stays 1 USDC
+- Token: USDC (6 decimals) (Address: 0x3600000000000000000000000000000000000000 on both Arc networks); bond amount is read from the active contract (initial deployment example: 1 USDC)
 - Toasts: Sonner
 
 ## Key Files
@@ -47,6 +54,7 @@ the deployment. The funding and deployment runbook is in
 - `src/App.tsx` - Main application logic
 - `src/components/` - UI components
 - `src/config.ts` - wagmi config (chains, connectors, transports)
+- `src/components/BondSettings.tsx` - owner-only mainnet bond editor
 
 ## To Run
 
