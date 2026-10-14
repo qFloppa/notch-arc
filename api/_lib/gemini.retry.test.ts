@@ -28,6 +28,7 @@ function stubFetch(sequence: FetchResult[]) {
 const ctx = {
   claimKind: 'overcharged', claim: 'x', memo: 'y',
   evidenceUri: '', evidenceContent: null, chargeAmount: 1_000_000n,
+  bondAmount: 1_000_000n,
 }
 const okBody = JSON.stringify({
   candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({

@@ -11,46 +11,26 @@
 
 import { createPublicClient, createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { arcTestnet } from 'viem/chains'
 import { judgeDispute, fetchEvidence } from './gemini.js'
+import { RELAYER_CHAINS } from './chains.js'
 
 // ---- Config ----------------------------------------------------------------
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const ARBITRATOR_PRIVATE_KEY = process.env.ARBITRATOR_PRIVATE_KEY
-export const CONTRACT_ADDRESS = (
-  process.env.VITE_NOTCH_CONTRACT_ADDRESS ??
-  process.env.NOTCH_CONTRACT_ADDRESS
-) as `0x${string}` | undefined
 
 // Deliberately NOT thrown at module load. A serverless runtime reports a module-load
 // throw as a bare FUNCTION_INVOCATION_FAILED 500 with no message, which makes a missing
 // env var indistinguishable from a broken deploy. Report it per-request instead.
-function missingConfig(): string[] {
+function missingConfig(chainId: number): string[] {
   const missing: string[] = []
   if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY')
   if (!ARBITRATOR_PRIVATE_KEY) missing.push('ARBITRATOR_PRIVATE_KEY')
-  if (!CONTRACT_ADDRESS) missing.push('VITE_NOTCH_CONTRACT_ADDRESS')
+  const cfg = RELAYER_CHAINS[chainId]
+  if (!cfg?.contract) missing.push(cfg?.contractEnvVar ?? 'NOTCH_CONTRACT_ADDRESS')
   return missing
 }
 
-
-// RPC: prefer an explicitly configured URL, then the Arc Studio proxy, then viem's
-// default. The proxy token is a ~30min JWT, so an explicit URL is the only sane
-// choice in production.
-function buildRpcUrl(): string {
-  const explicit = process.env.ARC_TESTNET_RPC_URL
-  if (explicit) return explicit
-  const proxyBase = process.env.RPC_PROXY_BASE_URL
-  const proxyToken = process.env.RPC_PROXY_TOKEN
-  const proxyChains = (process.env.RPC_PROXY_CHAINS ?? '').split(',')
-  if (proxyBase && proxyToken && proxyChains.includes('Arc_Testnet')) {
-    return `${proxyBase}/api/rpc/Arc_Testnet?_rpc_token=${proxyToken}`
-  }
-  return arcTestnet.rpcUrls.default.http[0]
-}
-
-export const RPC_URL = buildRpcUrl()
 
 // ---- Contract ABI (minimal) ------------------------------------------------
 
@@ -114,28 +94,30 @@ const SUBMIT_RULING_ABI = [{
 // Built on first use, never at module load — privateKeyToAccount() throws on a missing
 // or malformed key, and a load-time throw is the same opaque 500 as above.
 
-function buildClients() {
+function buildClients(chainId: number) {
+  const { chain, rpcUrl } = RELAYER_CHAINS[chainId]
   const account = privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`)
   return {
     account,
-    publicClient: createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) }),
-    walletClient: createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) }),
+    publicClient: createPublicClient({ chain, transport: http(rpcUrl) }),
+    walletClient: createWalletClient({ account, chain, transport: http(rpcUrl) }),
   }
 }
 
 // Inferred, not annotated: an explicit ReturnType<typeof createWalletClient> erases the
 // chain generic, and writeContract then demands an explicit `chain` arg.
-let _clients: ReturnType<typeof buildClients> | null = null
+const _clients = new Map<number, ReturnType<typeof buildClients>>()
 
-function clients() {
-  if (!_clients) _clients = buildClients()
-  return _clients
+function clients(chainId: number) {
+  let c = _clients.get(chainId)
+  if (!c) { c = buildClients(chainId); _clients.set(chainId, c) }
+  return c
 }
 
 /** Arbitrator address, or null if the key isn't configured — never throws. */
 export function arbitratorAddress(): string | null {
   try {
-    return clients().account.address
+    return privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`).address
   } catch {
     return null
   }
@@ -147,18 +129,22 @@ export function arbitratorAddress(): string | null {
 // Open and only the arbitrator can submit a ruling.
 
 export const processedDisputes = new Set<string>()
-export const retryAfter = new Map<string, number>()   // disputeId -> earliest next attempt (ms epoch)
-export const rulingLog: Array<{ disputeId: string; outcome: string; at: string; rationale: string }> = []
+export const retryAfter = new Map<string, number>()   // chainId:disputeId -> earliest next attempt
+export const rulingLog: Array<{ chainId: number; disputeId: string; outcome: string; at: string; rationale: string }> = []
 
 /** For /health — never throws, so a misconfigured deploy still returns a readable page. */
 export function health() {
-  const missing = missingConfig()
+  const chains = Object.entries(RELAYER_CHAINS).map(([id, cfg]) => ({
+    chainId: Number(id),
+    label: cfg.label,
+    contract: cfg.contract ?? null,
+    rpc: cfg.rpcUrl,
+    missingEnv: missingConfig(Number(id)),
+  }))
   return {
-    status: missing.length === 0 ? 'ok' : 'misconfigured',
-    missingEnv: missing,
+    status: chains.some(c => c.missingEnv.length === 0) ? 'ok' : 'misconfigured',
     arbitrator: arbitratorAddress(),
-    contract: CONTRACT_ADDRESS ?? null,
-    rpc: RPC_URL,
+    chains,
     processedThisInstance: processedDisputes.size,
     latestRulings: rulingLog.slice(-10),
   }
@@ -171,25 +157,28 @@ export type ProcessResult =
 
 // ---- Process a single dispute ----------------------------------------------
 
-export async function processDispute(disputeId: `0x${string}`): Promise<ProcessResult> {
-  const missing = missingConfig()
+export async function processDispute(disputeId: `0x${string}`, chainId: number): Promise<ProcessResult> {
+  const cfg = RELAYER_CHAINS[chainId]
+  if (!cfg) return { ok: false, error: `unsupported chainId: ${chainId}` }
+  const missing = missingConfig(chainId)
   if (missing.length > 0) {
-    return { ok: false, error: `relayer not configured — missing env: ${missing.join(', ')}` }
+    return { ok: false, error: `relayer not configured for ${cfg.label} — missing env: ${missing.join(', ')}` }
   }
-  if (processedDisputes.has(disputeId)) return { ok: true, skipped: 'already processed' }
-  const backoff = retryAfter.get(disputeId) ?? 0
+  const key = `${chainId}:${disputeId}`
+  if (processedDisputes.has(key)) return { ok: true, skipped: 'already processed' }
+  const backoff = retryAfter.get(key) ?? 0
   if (backoff > Date.now()) {
     return { ok: false, error: 'backing off', retryAfterMs: backoff - Date.now() }
   }
-  processedDisputes.add(disputeId)
+  processedDisputes.add(key)
 
-  console.log(`[relayer] Processing dispute ${disputeId}`)
-
-  const { publicClient, walletClient } = clients()
+  const contract = cfg.contract!
+  console.log(`[relayer] Processing dispute ${disputeId} on ${cfg.label}`)
 
   try {
+    const { publicClient, walletClient } = clients(chainId)
     const dispute = await publicClient.readContract({
-      address: CONTRACT_ADDRESS!,
+      address: contract,
       abi: GET_DISPUTE_ABI,
       functionName: 'getDispute',
       args: [disputeId],
@@ -211,7 +200,7 @@ export async function processDispute(disputeId: `0x${string}`): Promise<ProcessR
     }
 
     const item = await publicClient.readContract({
-      address: CONTRACT_ADDRESS!,
+      address: contract,
       abi: GET_ITEM_ABI,
       functionName: 'getItem',
       args: [dispute.itemId],
@@ -229,6 +218,7 @@ export async function processDispute(disputeId: `0x${string}`): Promise<ProcessR
         evidenceUri: item.evidenceUri,
         evidenceContent,
         chargeAmount: item.amount,
+        bondAmount: dispute.bondAmount,
       },
       GEMINI_API_KEY!
     )
@@ -236,7 +226,7 @@ export async function processDispute(disputeId: `0x${string}`): Promise<ProcessR
     console.log(`[relayer] Ruling: ${ruling.outcome} — ${ruling.rationale}`)
 
     const hash = await walletClient.writeContract({
-      address: CONTRACT_ADDRESS!,
+      address: contract,
       abi: SUBMIT_RULING_ABI,
       functionName: 'submitRuling',
       args: [
@@ -251,6 +241,7 @@ export async function processDispute(disputeId: `0x${string}`): Promise<ProcessR
 
     console.log(`[relayer] Ruling submitted: ${hash}`)
     rulingLog.push({
+      chainId,
       disputeId,
       outcome: ruling.outcome,
       at: new Date().toISOString(),
@@ -259,8 +250,8 @@ export async function processDispute(disputeId: `0x${string}`): Promise<ProcessR
     return { ok: true, outcome: ruling.outcome, txHash: hash, rationale: ruling.rationale }
   } catch (err) {
     const ms = (err as { retryAfterMs?: number })?.retryAfterMs ?? 60_000
-    retryAfter.set(disputeId, Date.now() + ms)
-    processedDisputes.delete(disputeId)  // allow retry after backoff
+    retryAfter.set(key, Date.now() + ms)
+    processedDisputes.delete(key)  // allow retry after backoff
     console.error(`[relayer] Error processing dispute ${disputeId} — retrying in ${Math.round(ms / 1000)}s:`, err)
     return { ok: false, error: err instanceof Error ? err.message : String(err), retryAfterMs: ms }
   }

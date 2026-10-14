@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi'
 import { ConnectKitButton } from 'connectkit'
 import OpenTabForm from './OpenTabForm'
 import { formatAddress } from '../notch-contract'
+import { useNotch } from '../networks'
 import { addStoredTabId } from '../tab-store'
 import NotchLogo from './NotchLogo'
 
@@ -49,6 +50,7 @@ function TallyMark({ count }: { count: number }) {
 
 export default function CycleDashboard({ tabs, onSelect, onRefresh }: Props) {
   const { address } = useAccount()
+  const notch = useNotch()
   const [lookupId, setLookupId] = useState('')
 
   return (
@@ -134,7 +136,7 @@ export default function CycleDashboard({ tabs, onSelect, onRefresh }: Props) {
               e.preventDefault()
               const id = lookupId.trim() as `0x${string}`
               if (!id.startsWith('0x') || id.length !== 66) return
-              if (address) addStoredTabId(address, id)
+              if (address) addStoredTabId(notch.chainId, address, id)
               setLookupId('')
               onRefresh()
             }}

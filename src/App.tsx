@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAccount, usePublicClient } from 'wagmi'
-import { NOTCH_CONTRACT, ARC_TESTNET_CHAIN_ID } from './notch-contract'
+import { useNotch } from './networks'
 import { getStoredTabIds } from './tab-store'
 import Header from './components/Header'
 import CycleDashboard from './components/CycleDashboard'
@@ -20,7 +20,20 @@ export interface TabSummary {
 
 export default function App() {
   const { address } = useAccount()
-  const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const notch = useNotch()
+  return (
+    <div className="min-h-dvh" style={{ background: 'var(--bg)' }}>
+      <Header />
+      {/* Drop tab, form and transaction state when the wallet or network changes. */}
+      <NetworkView key={`${notch.chainId}:${address ?? ''}`} />
+    </div>
+  )
+}
+
+function NetworkView() {
+  const { address } = useAccount()
+  const notch = useNotch()
+  const client = usePublicClient({ chainId: notch.chainId })
   const [view, setView] = useState<View>({ page: 'dashboard' })
   const [tabs, setTabs] = useState<TabSummary[]>([])
   const [refreshToken, setRefreshToken] = useState(0)
@@ -31,7 +44,7 @@ export default function App() {
     let cancelled = false
     const run = async () => {
       try {
-        const ids = getStoredTabIds(address)
+        const ids = getStoredTabIds(notch.chainId, address)
         if (ids.length === 0) {
           if (!cancelled) setTabs([])
           return
@@ -40,7 +53,7 @@ export default function App() {
           ids.map(async (tabId) => {
             try {
               const tab = await client.readContract({
-                ...NOTCH_CONTRACT,
+                ...notch.contract,
                 functionName: 'getTab',
                 args: [tabId],
               }) as { payer: `0x${string}`; payee: `0x${string}`; currentCycle: bigint; active: boolean }
@@ -57,12 +70,10 @@ export default function App() {
     }
     void run()
     return () => { cancelled = true }
-  }, [address, client, refreshToken])
+  }, [address, client, refreshToken, notch.chainId, notch.contract])
 
   return (
-    <div className="min-h-dvh" style={{ background: 'var(--bg)' }}>
-      <Header />
-
+    <>
       {/* Nav */}
       <div
         className="sticky z-30"
@@ -118,6 +129,6 @@ export default function App() {
           <RulingAdmin tabIds={tabs.map(t => t.tabId)} />
         )}
       </main>
-    </div>
+    </>
   )
 }

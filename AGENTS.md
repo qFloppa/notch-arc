@@ -8,7 +8,21 @@ This is the **project memory** - what Arc Studio remembers about building this a
 
 ## What This App Does
 
-Notch is a USDC clearing layer for agent micropayments on Arc Testnet. Agents open shared tabs, record hash-committed charges, close billing cycles into netted statements, and raise bonded disputes. Disputes are resolved by a Gemini-powered off-chain arbitrator relayer that fetches evidence, calls the Gemini API, and submits a ruling on-chain.
+Notch is a USDC clearing layer for agent micropayments supporting Arc Testnet and Arc mainnet. Agents open shared tabs, record hash-committed charges, close billing cycles into netted statements, and raise bonded disputes. Disputes are resolved by a Gemini-powered off-chain arbitrator relayer that fetches evidence, calls the Gemini API, and submits a ruling on-chain.
+
+Testnet is the default. The header switcher follows the connected wallet's chain;
+tabs and relayer dispute state are scoped to each network. Arc mainnet deployment
+is pending, and the mainnet switcher option is disabled until `VITE_NOTCH_ADDRESS_ARC`
+is configured. Set the matching relayer `NOTCH_CONTRACT_ADDRESS_ARC` after verifying
+the deployment. The funding and deployment runbook is in
+`docs/superpowers/plans/2026-10-13-arc-mainnet.md`, Task 6.
+
+Mainnet has an owner-only bond editor in the Arbitrator view. It uses the existing
+`setBondAmount(uint256)` function and accepts positive USDC amounts with up to six
+decimal places. Changes apply to new disputes; existing disputes keep their recorded
+bond. Dispute approvals read `bondAmount()` on the active chain, and the Gemini
+relayer awards against each dispute's stored bond. There is no fixed frontend bond
+constant. Choose a mainnet owner wallet that can be connected in the app.
 
 ## Deployed Contracts
 
@@ -31,8 +45,8 @@ Notch is a USDC clearing layer for agent micropayments on Arc Testnet. Agents op
 - Web3: wagmi v2, viem v2, ConnectKit
 - Contracts: Solidity 0.8.28 + Foundry. Sources in `contracts/`, unit tests in `contracts/test/*.t.sol`. Build with `bun run contracts:build` (`forge build`), test with `bun run contracts:test` (`forge test`).
 - Wallet: injected (MetaMask, etc.)
-- Chain: Arc Testnet (Chain ID: 5042002, imported from `viem/chains`)
-- Token: USDC (6 decimals) (Address: 0x3600000000000000000000000000000000000000, Chain: Arc Testnet)
+- Chains: Arc Testnet (5042002, `arcTestnet`) and Arc mainnet (5042, `arc`), imported from `viem/chains`; selected with the header wallet-network switcher
+- Token: USDC (6 decimals) (Address: 0x3600000000000000000000000000000000000000 on both Arc networks); bond amount is read from the active contract (initial deployment example: 1 USDC)
 - Toasts: Sonner
 
 ## Key Files
@@ -40,6 +54,7 @@ Notch is a USDC clearing layer for agent micropayments on Arc Testnet. Agents op
 - `src/App.tsx` - Main application logic
 - `src/components/` - UI components
 - `src/config.ts` - wagmi config (chains, connectors, transports)
+- `src/components/BondSettings.tsx` - owner-only mainnet bond editor
 
 ## To Run
 

@@ -4,15 +4,14 @@ import { keccak256, encodeAbiParameters, parseAbiParameters } from 'viem'
 import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
 import {
-  NOTCH_CONTRACT,
   USDC_ADDRESS,
-  ARC_TESTNET_CHAIN_ID,
   STATUS_LABELS,
   formatUsdc,
   formatAddress,
   formatTimestamp,
   pushDispute,
 } from '../notch-contract'
+import { useNotch } from '../networks'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import RecordChargeForm from './RecordChargeForm'
 import DisputePanel from './DisputePanel'
@@ -89,8 +88,9 @@ function computeStatementHash(items: { itemId: `0x${string}`; amount: bigint }[]
 }
 
 export default function TabView({ tabId, onBack }: Props) {
-  const { address, chainId } = useAccount()
-  const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const { address } = useAccount()
+  const notch = useNotch()
+  const client = usePublicClient({ chainId: notch.chainId })
 
   // Bump to force a re-read of the on-chain structs below. They are cached against the
   // ID lists, so a status-only transition (dispute filed, ruling in, accepted, settled)
@@ -99,20 +99,19 @@ export default function TabView({ tabId, onBack }: Props) {
   const triggerRefresh = () => setRefreshToken(t => t + 1)
 
   const { data: tabRaw, refetch: refetchTab } = useReadContract({
-    ...NOTCH_CONTRACT, functionName: 'getTab', args: [tabId], chainId: ARC_TESTNET_CHAIN_ID,
+    ...notch.contract, functionName: 'getTab', args: [tabId],
   })
   const tab = tabRaw as TabData | undefined
 
   const { data: cycleItemIds, refetch: refetchCycleItems } = useReadContract({
-    ...NOTCH_CONTRACT,
+    ...notch.contract,
     functionName: 'getTabCycleItemIds',
     args: [tabId, tab?.currentCycle ?? 1n],
-    chainId: ARC_TESTNET_CHAIN_ID,
     query: { enabled: !!tab },
   })
 
   const { data: statementIds, refetch: refetchStatements } = useReadContract({
-    ...NOTCH_CONTRACT, functionName: 'getTabStatementIds', args: [tabId], chainId: ARC_TESTNET_CHAIN_ID,
+    ...notch.contract, functionName: 'getTabStatementIds', args: [tabId],
   })
 
   const [cycleItems, setCycleItems] = useState<LineItemData[]>([])
@@ -126,7 +125,7 @@ export default function TabView({ tabId, onBack }: Props) {
     if (!client || !ids) return
     let cancelled = false
     void Promise.all(
-      ids.map(id => client.readContract({ ...NOTCH_CONTRACT, functionName: 'getItem', args: [id] }))
+      ids.map(id => client.readContract({ ...notch.contract, functionName: 'getItem', args: [id] }))
     ).then(results => { if (!cancelled) setCycleItems(results as LineItemData[]) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,7 +147,7 @@ export default function TabView({ tabId, onBack }: Props) {
     if (!client || !ids || ids.length === 0) return
     let cancelled = false
     void Promise.all(
-      ids.map(id => client.readContract({ ...NOTCH_CONTRACT, functionName: 'getStatement', args: [id] }))
+      ids.map(id => client.readContract({ ...notch.contract, functionName: 'getStatement', args: [id] }))
     ).then(results => { if (!cancelled) setStmtList(results as StatementData[]) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +164,7 @@ export default function TabView({ tabId, onBack }: Props) {
     let cancelled = false
     void Promise.all(
       ids.map(async id =>
-        [id, (await client.readContract({ ...NOTCH_CONTRACT, functionName: 'getItem', args: [id] }) as LineItemData).amount] as const
+        [id, (await client.readContract({ ...notch.contract, functionName: 'getItem', args: [id] }) as LineItemData).amount] as const
       )
     ).then(entries => { if (!cancelled) setItemAmounts(Object.fromEntries(entries)) })
     return () => { cancelled = true }
@@ -189,12 +188,12 @@ export default function TabView({ tabId, onBack }: Props) {
           stmt.itemIds.map(async itemId => {
             try {
               const disputeId = await client.readContract({
-                ...NOTCH_CONTRACT, functionName: 'disputeByStatementAndItem',
+                ...notch.contract, functionName: 'disputeByStatementAndItem',
                 args: [stmt.statementId, itemId],
               }) as `0x${string}`
               if (disputeId === '0x0000000000000000000000000000000000000000000000000000000000000000') return
               const dispute = await client.readContract({
-                ...NOTCH_CONTRACT, functionName: 'getDispute', args: [disputeId],
+                ...notch.contract, functionName: 'getDispute', args: [disputeId],
               }) as DisputeData
               entries[stmt.statementId] = dispute
               // Still Open on-chain → make sure the relayer is working it, and reflect the
@@ -204,7 +203,7 @@ export default function TabView({ tabId, onBack }: Props) {
               if (dispute.status === 0) {
                 const sid = stmt.statementId
                 setArbState(s => ({ ...s, [sid]: s[sid] ?? 'reviewing' }))
-                void pushDispute(disputeId).then(result => {
+                void pushDispute(disputeId, notch.chainId).then(result => {
                   if (cancelled || !result) return
                   setArbState(s => ({ ...s, [sid]: result.ok ? 'reviewing' : 'busy' }))
                 })
@@ -221,16 +220,16 @@ export default function TabView({ tabId, onBack }: Props) {
   }, [client, stmtListKey, refreshToken])
 
   const { writeContract: closeCycle, data: closeTx, isPending: isClosing } = useWriteContract()
-  const { isLoading: isCloseConfirming, isSuccess: closeSuccess } = useWaitForTransactionReceipt({ hash: closeTx })
+  const { isLoading: isCloseConfirming, isSuccess: closeSuccess } = useWaitForTransactionReceipt({ hash: closeTx, chainId: notch.chainId })
 
   const { writeContract: acceptStatement, data: acceptTx, isPending: isAccepting } = useWriteContract()
-  const { isLoading: isAcceptConfirming, isSuccess: acceptSuccess } = useWaitForTransactionReceipt({ hash: acceptTx })
+  const { isLoading: isAcceptConfirming, isSuccess: acceptSuccess } = useWaitForTransactionReceipt({ hash: acceptTx, chainId: notch.chainId })
 
   const { writeContract: settleStatement, data: settleTx, isPending: isSettling } = useWriteContract()
-  const { isLoading: isSettleConfirming, isSuccess: settleSuccess } = useWaitForTransactionReceipt({ hash: settleTx })
+  const { isLoading: isSettleConfirming, isSuccess: settleSuccess } = useWaitForTransactionReceipt({ hash: settleTx, chainId: notch.chainId })
 
   const { writeContract: approveUsdc, data: approveTx, isPending: isApproving } = useWriteContract()
-  const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx })
+  const { isLoading: isApproveConfirming, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx, chainId: notch.chainId })
 
   // USDC the payer has approved the Notch contract to pull. Settle can't move funds until
   // this covers the statement's net amount, so the Settle button keys off it.
@@ -238,11 +237,11 @@ export default function TabView({ tabId, onBack }: Props) {
     address: USDC_ADDRESS,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: [address ?? '0x0000000000000000000000000000000000000000', NOTCH_CONTRACT.address],
-    chainId: ARC_TESTNET_CHAIN_ID,
+    args: [address ?? '0x0000000000000000000000000000000000000000', notch.contract.address],
+    chainId: notch.chainId,
     query: { enabled: !!address },
   })
-  const allowance = (allowanceRaw as bigint | undefined) ?? 0n
+  const allowance = allowanceRaw ?? 0n
 
   const refetchAll = () => { triggerRefresh() }
 
@@ -256,7 +255,7 @@ export default function TabView({ tabId, onBack }: Props) {
 
   useEffect(() => {
     if (closeSuccess && closeTx) {
-      toast.success('Cycle closed', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, closeTx), '_blank') } })
+      toast.success('Cycle closed', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, closeTx), '_blank') } })
       setCycleItems([])   // cycle just rolled over to an empty one — drop its items now so the button can't re-fire
       refetchAll()
     }
@@ -265,7 +264,7 @@ export default function TabView({ tabId, onBack }: Props) {
 
   useEffect(() => {
     if (acceptSuccess && acceptTx) {
-      toast.success('Statement accepted', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, acceptTx), '_blank') } })
+      toast.success('Statement accepted', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, acceptTx), '_blank') } })
       triggerRefresh()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,7 +272,7 @@ export default function TabView({ tabId, onBack }: Props) {
 
   useEffect(() => {
     if (settleSuccess && settleTx) {
-      toast.success('Statement settled — USDC transferred', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, settleTx), '_blank') } })
+      toast.success('Statement settled — USDC transferred', { action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, settleTx), '_blank') } })
       triggerRefresh()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -447,9 +446,9 @@ export default function TabView({ tabId, onBack }: Props) {
             {isPayer && tab.active && cycleItems.length > 0 && (
               <button
                 onClick={() => {
-                  if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+                  if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
                   if (!cycleCloseable) return
-                  closeCycle({ ...NOTCH_CONTRACT, functionName: 'closeCycle', args: [tabId], chainId: ARC_TESTNET_CHAIN_ID })
+                  closeCycle({ ...notch.contract, functionName: 'closeCycle', args: [tabId] })
                 }}
                 disabled={isClosing || isCloseConfirming || !cycleCloseable}
                 className="mt-3 w-full py-2.5 rounded-xl font-semibold text-sm disabled:opacity-40"
@@ -481,7 +480,7 @@ export default function TabView({ tabId, onBack }: Props) {
                   const stmtItems = stmt.itemIds.map(id => ({ itemId: id, amount: itemAmounts[id] }))
                   const haveAllAmounts = stmt.itemIds.length > 0 && stmtItems.every(x => x.amount !== undefined)
                   const computedHash = haveAllAmounts
-                    ? computeStatementHash(stmtItems as { itemId: `0x${string}`; amount: bigint }[])
+                    ? computeStatementHash(stmtItems)
                     : null
                   const hashMatch = computedHash !== null && computedHash === stmt.statementHash
 
@@ -530,8 +529,8 @@ export default function TabView({ tabId, onBack }: Props) {
                         {isPayee && stmt.status === 0 && (
                           <button
                             onClick={() => {
-                              if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
-                              acceptStatement({ ...NOTCH_CONTRACT, functionName: 'acceptStatement', args: [stmt.statementId], chainId: ARC_TESTNET_CHAIN_ID })
+                              if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
+                              acceptStatement({ ...notch.contract, functionName: 'acceptStatement', args: [stmt.statementId] })
                             }}
                             disabled={isAccepting || isAcceptConfirming}
                             className="text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-40"
@@ -545,13 +544,13 @@ export default function TabView({ tabId, onBack }: Props) {
                           <>
                             <button
                               onClick={() => {
-                                if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+                                if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
                                 approveUsdc({
                                   address: USDC_ADDRESS,
                                   abi: erc20Abi,
                                   functionName: 'approve',
-                                  args: [NOTCH_CONTRACT.address, stmt.netAmount],
-                                  chainId: ARC_TESTNET_CHAIN_ID,
+                                  args: [notch.contract.address, stmt.netAmount],
+                                  chainId: notch.chainId,
                                 })
                               }}
                               disabled={isApproving || isApproveConfirming}
@@ -562,8 +561,8 @@ export default function TabView({ tabId, onBack }: Props) {
                             </button>
                             <button
                               onClick={() => {
-                                if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
-                                settleStatement({ ...NOTCH_CONTRACT, functionName: 'settleStatement', args: [stmt.statementId], chainId: ARC_TESTNET_CHAIN_ID })
+                                if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
+                                settleStatement({ ...notch.contract, functionName: 'settleStatement', args: [stmt.statementId] })
                               }}
                               disabled={isSettling || isSettleConfirming || allowance < stmt.netAmount}
                               className="text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-40"
@@ -620,13 +619,14 @@ function DisputeCard({ dispute, arb, payee, viewer }: { dispute: DisputeData; ar
   // Best-effort ruling-tx link via the BondCredited event (indexed by disputeId).
   // ponytail: full-range log scan; Arc RPC may cap the range and reject — if so we fall
   // back to the recipient's address link, which always resolves.
-  const client = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const notch = useNotch()
+  const client = usePublicClient({ chainId: notch.chainId })
   const [rulingTx, setRulingTx] = useState<`0x${string}` | null>(null)
   useEffect(() => {
     if (isPending || !client) return
     let cancelled = false
     void client.getContractEvents({
-      ...NOTCH_CONTRACT, eventName: 'BondCredited', args: { disputeId: dispute.disputeId }, fromBlock: 0n, toBlock: 'latest',
+      ...notch.contract, eventName: 'BondCredited', args: { disputeId: dispute.disputeId }, fromBlock: 0n, toBlock: 'latest',
     }).then(logs => { if (!cancelled && logs[0]?.transactionHash) setRulingTx(logs[0].transactionHash) }).catch(() => {})
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -693,7 +693,7 @@ function DisputeCard({ dispute, arb, payee, viewer }: { dispute: DisputeData; ar
             {rulingTx && (
               <>
                 {' · '}
-                <a href={buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, rulingTx)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                <a href={buildTxExplorerUrl(notch.chainId, rulingTx)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
                   Ruling tx ↗
                 </a>
               </>

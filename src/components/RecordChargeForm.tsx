@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { toast } from 'sonner'
 import { keccak256, toBytes } from 'viem'
-import { NOTCH_CONTRACT, ARC_TESTNET_CHAIN_ID } from '../notch-contract'
+import { useNotch } from '../networks'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 
 interface Props {
@@ -30,7 +30,8 @@ const PRESETS = [
 ] as const
 
 export default function RecordChargeForm({ tabId, onRecorded }: Props) {
-  const { address, chainId } = useAccount()
+  const { address } = useAccount()
+  const notch = useNotch()
   const [preset, setPreset] = useState(0)
   const [amount, setAmount] = useState<string>(PRESETS[0].amount)
   const [memo, setMemo] = useState<string>(PRESETS[0].memo)
@@ -45,12 +46,12 @@ export default function RecordChargeForm({ tabId, onRecorded }: Props) {
   }
 
   const { writeContract, data: hash, isPending, reset } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash, chainId: notch.chainId })
 
   useEffect(() => {
     if (isSuccess && hash) {
       toast.success('Charge recorded', {
-        action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, hash), '_blank') },
+        action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, hash), '_blank') },
       })
       reset()
       setOpen(false)
@@ -61,14 +62,13 @@ export default function RecordChargeForm({ tabId, onRecorded }: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
+    if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
     const amountRaw = BigInt(Math.round(parseFloat(amount) * 1_000_000))
     const evidenceHash = keccak256(toBytes(evidenceUri || 'no-evidence'))
     writeContract({
-      ...NOTCH_CONTRACT,
+      ...notch.contract,
       functionName: 'recordCharge',
       args: [tabId, amountRaw, memo, evidenceUri, evidenceHash],
-      chainId: ARC_TESTNET_CHAIN_ID,
     })
   }
 

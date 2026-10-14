@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { toast } from 'sonner'
-import { NOTCH_CONTRACT, ARC_TESTNET_CHAIN_ID, formatUsdc } from '../notch-contract'
+import { formatUsdc } from '../notch-contract'
+import { useNotch } from '../networks'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 
 const ZERO = '0x0000000000000000000000000000000000000000' as const
@@ -12,25 +13,25 @@ const ZERO = '0x0000000000000000000000000000000000000000' as const
  * a tab they can see. Renders nothing when there's nothing to claim.
  */
 export default function ClaimCredit() {
-  const { address, chainId } = useAccount()
+  const { address } = useAccount()
+  const notch = useNotch()
 
   const { data: creditRaw, refetch } = useReadContract({
-    ...NOTCH_CONTRACT,
+    ...notch.contract,
     functionName: 'getCredit',
     args: [address ?? ZERO],
-    chainId: ARC_TESTNET_CHAIN_ID,
     // ponytail: poll so a ruling that lands while the payee waits here shows up on its own.
     query: { enabled: !!address, refetchInterval: 10_000 },
   })
   const credit = (creditRaw as bigint | undefined) ?? 0n
 
   const { writeContract, data: tx, isPending } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: tx })
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: tx, chainId: notch.chainId })
 
   useEffect(() => {
     if (isSuccess && tx) {
       toast.success('Claimed to your wallet', {
-        action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, tx), '_blank') },
+        action: { label: 'Explorer', onClick: () => window.open(buildTxExplorerUrl(notch.chainId, tx), '_blank') },
       })
       void refetch()
     }
@@ -55,8 +56,8 @@ export default function ClaimCredit() {
       </div>
       <button
         onClick={() => {
-          if (chainId !== ARC_TESTNET_CHAIN_ID) { toast.error('Switch to Arc Testnet first.'); return }
-          writeContract({ ...NOTCH_CONTRACT, functionName: 'withdraw', args: [credit], chainId: ARC_TESTNET_CHAIN_ID })
+          if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
+          writeContract({ ...notch.contract, functionName: 'withdraw', args: [credit] })
         }}
         disabled={isPending || isConfirming}
         className="py-2.5 px-5 rounded-xl font-semibold text-sm disabled:opacity-40 shrink-0"
