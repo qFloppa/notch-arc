@@ -71,6 +71,11 @@ as a practical workaround at current fees or test another wallet; this is not a
 contract minimum. Details and verification are in the deployment plan and README.
 The mainnet dispute form shows this Rabby tip before filing, explains that approval
 does not add funds, and labels oversized-allowance resets with the exact bond amount.
+The dispute form shows the filing deadline and time remaining on both networks.
+It reads the current owner-configured window and chain timestamp, replaces expired
+filing controls with an explanation, and rechecks before approval or filing. Filing
+also runs a read-only contract simulation before opening the wallet. A deadline can
+still pass while a wallet confirmation is open; submit with time to spare.
 
 ## Tech Stack
 

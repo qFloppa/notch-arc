@@ -153,6 +153,25 @@
   are confirmed by contract events. The upheld charge was excused and settlement
   transferred the remaining 0.005 USDC. Remaining owner/network checks are pending.
 
+### Dispute expiry UI follow-up (2026-10-14)
+
+- Both networks now show a statement's dispute deadline and remaining time using
+  its `closedAt`, the current on-chain window, and the active chain timestamp.
+  Expired windows replace approval/filing controls with an explanation and cutoff.
+  Unknown or failed reads disable filing and offer retry; owner changes refresh
+  existing statement deadlines.
+- Before either wallet action, the app reads the latest block and pins the window
+  getter to that block. Filing also simulates `openDispute` before opening the wallet.
+  A near-deadline notice explains that the window may expire during confirmation.
+  No contract changes, deployment, or real transactions were performed by the agent.
+- Regression tests first reproduced the old active button on an expired statement.
+  Deadline tests cover the inclusive Solidity boundary, owner window changes,
+  fresh pinned-block reads, and RPC failure. Server rendering covers both networks,
+  available/expired/loading/error states, and disabled filing with missing data.
+  Build, scoped TypeScript, frontend type-aware lint, and repository lint pass.
+- Static review found no material issues. Browser click handlers and wallet timing
+  remain manual checks under the user's deferred browser-testing instruction.
+
 Current code checkpoints:
 
 - [x] Task 1: network resolution and wagmi configuration
