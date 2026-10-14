@@ -124,6 +124,18 @@ the approved amount does not fix this simulation issue.
 The mainnet dispute form shows this tip before filing and explains when a larger
 approval needs resetting to the exact bond amount.
 
+### Dispute deadlines
+
+The statement's dispute form shows the deadline and time remaining, using the
+active chain's timestamp and current `disputeWindowSeconds`. After expiry it shows
+**Dispute window expired** and removes the approval and filing controls. Missing
+or failed deadline reads disable filing with a retry option.
+
+The app rechecks the deadline before requesting either wallet action and simulates
+filing before opening the wallet. Confirm promptly: a deadline can still pass while
+you review a transaction in your wallet. Owner changes to the window update existing
+statement deadlines too; they do not limit completion of an already-filed dispute.
+
 ## Running locally
 
 Requires [Bun](https://bun.sh).

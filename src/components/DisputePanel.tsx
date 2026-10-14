@@ -1,17 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient, useBlock } from 'wagmi'
+import { getBlockQueryKey, readContractQueryKey } from 'wagmi/query'
+import { useQueryClient } from '@tanstack/react-query'
 import { erc20Abi } from 'viem'
 import { toast } from 'sonner'
 import {
   USDC_ADDRESS,
   CLAIM_KINDS,
   formatUsdc,
+  formatTimestamp,
 } from '../notch-contract'
 import { useNotch } from '../networks'
+import { getDisputeWindow, readDisputeWindow } from '../dispute-window'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 
 interface Props {
   statementId: `0x${string}`
+  closedAt: bigint
   itemIds: `0x${string}`[]
   onDisputed: () => void
 }
@@ -48,14 +53,16 @@ const CLAIM_DEFAULTS: Record<string, string> = {
 }
 
 
-export default function DisputePanel({ statementId, itemIds, onDisputed }: Props) {
+export default function DisputePanel({ statementId, closedAt, itemIds, onDisputed }: Props) {
   const { address } = useAccount()
   const notch = useNotch()
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<`0x${string}`>(itemIds[0] ?? '0x')
   const [claimKind, setClaimKind] = useState<string>(CLAIM_KINDS[0])
   const [claim, setClaim] = useState<string>(CLAIM_DEFAULTS[CLAIM_KINDS[0]] ?? '')
   const [isChecking, setIsChecking] = useState(false)
+  const [deadlineCheckError, setDeadlineCheckError] = useState(false)
   const active = useRef(true)
   useEffect(() => {
     active.current = true
@@ -67,6 +74,19 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
 
   const { writeContract: openDispute, data: disputeTx, isPending: isDisputing, error: disputeError } = useWriteContract()
   const { isLoading: isDisputeConfirming, isSuccess: disputeSuccess, data: disputeReceipt, error: disputeReceiptError } = useWaitForTransactionReceipt({ hash: disputeTx, chainId: notch.chainId })
+
+  // Read even while collapsed, so expired statements never offer an active filing button.
+  // These query keys are shared by every statement on the same network.
+  const { data: windowRaw, isError: windowError, refetch: refetchWindow } = useReadContract({
+    ...notch.contract, functionName: 'disputeWindowSeconds',
+    query: { refetchInterval: 10_000 },
+  })
+  const { data: block, isError: blockError, refetch: refetchBlock } = useBlock({
+    chainId: notch.chainId, query: { refetchInterval: 5_000 },
+  })
+  const deadlineError = windowError || blockError || deadlineCheckError
+  const disputeWindow = deadlineError ? undefined : getDisputeWindow(closedAt, typeof windowRaw === 'bigint' ? windowRaw : undefined, block?.timestamp)
+  const canDispute = disputeWindow !== undefined && !disputeWindow.expired
 
   const { data: bondRaw, isError: bondError, isFetching: bondFetching, refetch: refetchBond } = useReadContract({
     ...notch.contract,
@@ -125,7 +145,7 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeSuccess, disputeTx, disputeReceipt])
 
-  const readsReady = bondAmount !== undefined && allowance !== undefined && !bondError && !allowanceError
+  const readsReady = canDispute && bondAmount !== undefined && allowance !== undefined && !bondError && !allowanceError
   // Exact approval caps the amount collected if the owner raises the bond while
   // the wallet confirmation is open. A larger old allowance must be lowered first.
   const hasBondApproval = readsReady && allowance === bondAmount
@@ -136,12 +156,30 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   // the approval step; a changed amount must be shown before the user proceeds.
   async function submitBondAction(action: 'approve' | 'dispute') {
     if (!notch.isWalletOnNetwork) { toast.error(`Switch to ${notch.name} first.`); return }
-    if (!readsReady || busy) return
+    if (!readsReady || busy || !client || !address) return
     if (action === 'dispute' && !claim.trim()) { toast.error('Describe your claim first.'); return }
     setIsChecking(true)
     try {
       const [bondResult, allowanceResult] = await Promise.all([refetchBond(), refetchAllowance()])
       if (!active.current) return
+      let checkedWindow
+      try {
+        checkedWindow = await readDisputeWindow(client, notch.contract.address, closedAt)
+      } catch {
+        if (active.current) {
+          setDeadlineCheckError(true)
+          toast.error('Could not verify the dispute deadline. Try again.')
+        }
+        return
+      }
+      if (!active.current) return
+      queryClient.setQueryData(getBlockQueryKey({ chainId: notch.chainId }), checkedWindow.block)
+      queryClient.setQueryData(readContractQueryKey({ ...notch.contract, functionName: 'disputeWindowSeconds' }), checkedWindow.windowSeconds)
+      if (checkedWindow.expired) { toast.error('The dispute window has expired. This statement can no longer be disputed.'); return }
+      if (checkedWindow.deadline !== disputeWindow?.deadline) {
+        toast.info('The dispute deadline changed. Review the new deadline and try again.')
+        return
+      }
       const currentBond = bondResult.data
       const currentAllowance = allowanceResult.data
       if (bondResult.isError || allowanceResult.isError || typeof currentBond !== 'bigint' || currentBond <= 0n || currentAllowance === undefined) {
@@ -161,27 +199,71 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
         }, { onError })
       } else {
         if (currentAllowance !== currentBond) { toast.error('Approve the current bond amount before filing.'); return }
+        // Bond/allowance reads may take time; simulate the actual call once more before
+        // opening the wallet, catching expiry and other changed on-chain conditions.
+        await client.simulateContract({
+          ...notch.contract, account: address, functionName: 'openDispute',
+          args: [statementId, selectedItem, claimKind, claim],
+        })
+        if (!active.current) return
         openDispute({
           ...notch.contract, functionName: 'openDispute',
           args: [statementId, selectedItem, claimKind, claim],
         }, { onError })
       }
-    } catch {
-      if (active.current) toast.error('Could not check the bond. Try again.')
+    } catch (error) {
+      if (active.current) {
+        if (error instanceof Error && error.message.includes('DisputeWindowExpired')) {
+          toast.error('The dispute window has expired. This statement can no longer be disputed.')
+          void refetchBlock()
+        } else {
+          toast.error(error instanceof Error ? error.message.split('\n')[0] : 'Could not check the dispute. Try again.')
+        }
+      }
     } finally {
       if (active.current) setIsChecking(false)
     }
   }
 
+  const deadlineNotice = deadlineError ? (
+    <p role="alert" className="text-xs" style={{ color: 'var(--danger)' }}>
+      Could not verify the dispute deadline.{' '}
+      <button className="underline" onClick={() => {
+        setDeadlineCheckError(false)
+        void refetchWindow()
+        void refetchBlock()
+      }}>Retry</button>
+    </p>
+  ) : disputeWindow ? (
+    <p className="text-xs" style={{ color: 'var(--muted)' }}>
+      Dispute deadline: {formatTimestamp(disputeWindow.deadline)} ·{' '}
+      {disputeWindow.remaining / 60n > 0n ? `${disputeWindow.remaining / 60n}m ` : ''}{(disputeWindow.remaining % 60n).toString()}s remaining.
+      {disputeWindow.remaining <= 60n && ' The window may expire while you confirm in your wallet.'}
+    </p>
+  ) : <p className="text-xs" style={{ color: 'var(--muted)' }}>Checking dispute deadline…</p>
+
+  if (disputeWindow?.expired) {
+    return (
+      <div role="status" className="w-full rounded-lg p-3 text-xs" style={{ background: 'var(--surface-2)', color: 'var(--muted)', lineHeight: '1.5' }}>
+        <p className="font-semibold">Dispute window expired</p>
+        <p>Disputes closed {formatTimestamp(disputeWindow.deadline)}. New disputes can no longer be filed for this statement.</p>
+      </div>
+    )
+  }
+
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-        style={{ background: 'var(--danger-dim)', color: 'var(--danger)', border: '1px solid rgba(248,81,73,0.25)' }}
-      >
-        File Dispute
-      </button>
+      <div className="space-y-2">
+        {deadlineNotice}
+        <button
+          onClick={() => setOpen(true)}
+          disabled={!canDispute || !notch.isWalletOnNetwork}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40"
+          style={{ background: 'var(--danger-dim)', color: 'var(--danger)', border: '1px solid rgba(248,81,73,0.25)' }}
+        >
+          File Dispute
+        </button>
+      </div>
     )
   }
 
@@ -197,6 +279,8 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
         </div>
         <button onClick={() => setOpen(false)} style={{ color: 'var(--muted)', fontSize: '1.1rem', lineHeight: 1 }}>×</button>
       </div>
+
+      {deadlineNotice}
 
       {/* Bond notice */}
       <div className="rounded-lg p-3 text-xs" style={{ background: 'rgba(248,81,73,0.07)', color: 'var(--ink-2)', lineHeight: '1.5' }}>

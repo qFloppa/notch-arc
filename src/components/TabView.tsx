@@ -574,7 +574,7 @@ export default function TabView({ tabId, onBack }: Props) {
                         )}
 
                         {isPayer && stmt.status === 0 && (
-                          <DisputePanel statementId={stmt.statementId} itemIds={stmt.itemIds} onDisputed={() => triggerRefresh()} />
+                          <DisputePanel statementId={stmt.statementId} closedAt={stmt.closedAt} itemIds={stmt.itemIds} onDisputed={() => triggerRefresh()} />
                         )}
                       </div>
 
