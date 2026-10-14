@@ -4,7 +4,7 @@
 >
 > **Execution method: NATIVE, chosen by the user on 2026-10-13.** Implement every task yourself in-session; do not dispatch per-task subagents. One fresh reviewer on the most capable model checks the whole branch at the end. Do not re-ask which execution method to use.
 >
-> **Status (2026-10-14): Tasks 1–5 are implemented on `arc-mainnet`.** Task 1 was committed by Claude; the remaining frontend and relayer work was continued by Codex. Task 6 funding and deployment remain operator work. Browser and wallet testing was deferred by the user on 2026-10-14.
+> **Status (2026-10-14): Tasks 1–5 are implemented on `arc-mainnet`.** Task 1 was committed by Claude; the remaining frontend and relayer work was continued by Codex. The user deployed Arc mainnet; the receipt, contract settings, and live relayer configuration are verified. Deployment documentation is updated. Mainnet end-to-end testing is in progress; agent browser testing remains deferred by the user.
 
 **Goal:** Run Notch on Arc mainnet (chain 5042) alongside Arc Testnet, selected by an in-app network switcher that defaults to testnet.
 
@@ -91,6 +91,68 @@
   Live signing and contract-arbitrator matching remain deployment verification;
   browser/wallet checks are still deferred by the user.
 
+### Mainnet deployment and dispute diagnosis (2026-10-14)
+
+- The user deployed `0x385285f6161FB84eDb3C5354B0e3bB1D6b7683a3` on Arc mainnet.
+  Creation transaction `0x3f3186b60831029f1862c67bcbe5c85e1b6f7e4c30acf7fc9f9beafb65d71361`
+  succeeded at block 25910657. Decoded constructor arguments: native USDC ERC-20
+  `0x3600000000000000000000000000000000000000`, arbitrator and owner both
+  `0x051Cf644B01DE23EbDca61E7DdBad6bEfdAFF0Df`, initial bond 1000000, window 3600.
+- Current getters confirm that token, owner, arbitrator, and window. The owner has
+  changed the bond to 100000 (0.1 USDC). The live `/relayer/health` lists the correct
+  contract and matching public arbitrator for both networks with empty `missingEnv`
+  and `invalidEnv`; no keys were inspected or changed.
+- Mainnet events confirm a tab, two 0.005 USDC charges, and a closed 0.01 USDC
+  statement. The user reports Rabby rejects filing with
+  `ERC20: transfer amount exceeds balance #-39000`.
+- During diagnosis, the payer's native balance was 0.686189454726204519 USDC,
+  the six-decimal token balance was 686189, and allowance was 100000. Read-only
+  `openDispute` simulations succeeded for the statement and first charge; gas
+  estimation returned 484982 (about 0.0097 USDC at the then-current gas price).
+  Estimates also succeeded with explicit legacy and EIP-1559 fees. The RPC
+  checks did not reproduce Rabby's error, and Rabby uses its own pre-execution
+  service. The exact cause within that service remains unverified; testing
+  another wallet was suggested. No dispute was signed or broadcast by the agent.
+- Approving 0.2 USDC leaves the app at the approval step deliberately: the app
+  requires exact allowance to cap collection if the owner increases the bond
+  before filing. The Solidity contract accepts allowance at least equal to the
+  bond. Increasing allowance does not address a token-balance simulation error.
+- README and AGENTS now record the verified deployment. Settlement, live dispute
+  filing and ruling, and the remaining owner/network wallet checks are pending.
+
+### Rabby low-balance simulation reproduction (2026-10-14)
+
+- The user reports filing succeeds with about 4 USDC and fails after reducing the
+  balance below 1 USDC. The failing wallet is the original owner/payer
+  `0x051Cf644B01DE23EbDca61E7DdBad6bEfdAFF0Df`.
+- Read-only 0.1 USDC ERC-20 `transfer` simulations isolate the token balance path
+  without depending on an unexpired statement or allowance. Arc RPC succeeds with
+  balance 0.67497055399686843 USDC and estimates 49338 gas (0.00098676 USDC at 20 gwei).
+- Rabby's public `/v1/wallet/pre_exec_tx` returns the exact reported `-39000`
+  `ERC20: transfer amount exceeds balance` with fees included. Zero-fee simulation
+  succeeds. An explicit gas limit of 74007 does not change the failure. Test fee
+  values were used only for simulations; no transaction was signed or broadcast.
+- At 20 gwei, simulated transfers of 74969 and 74970 micro-USDC succeed while
+  74971 fails. This isolates an effective reservation of 0.6 USDC, consistent with
+  30000000 gas times 20 gwei, rather than the supplied/estimated gas limit.
+  A 0.1 USDC transfer also succeeds at 19 gwei and fails at 19.2 gwei, supporting
+  the same reservation model. Backend implementation details are not public.
+- This is a reproduced Rabby fee-simulation issue, not a Notch bond, allowance,
+  or decimal mismatch. The actual balance minimum for Rabby's simulation varies
+  with the transferred amount and fee. Keeping over 1 USDC is a practical workaround
+  at current fees, or test another wallet. A gas-cap app patch was ruled out by
+  the explicit-limit comparison; no transaction code was changed.
+- The successful mainnet dispute transaction
+  `0xc55402f4e9cc40e1e20352d2220db2d65664eb72c6de664edfe8264bea5bd3f7`
+  used 479976 gas and cost 0.009599520641727912 USDC. Its 0.1 USDC bond was awarded
+  to the claimant by upheld ruling transaction
+  `0xaac4e9220216830195f495c60362bb379e619344a6d5b9f65d1bf0f6dbc72773`.
+  Bond withdrawal `0xccfb137afc00f5dd2f188682d786ab26a7b7ede97223e84faac5b2517930e11f`
+  and statement settlement
+  `0xa905d31042e82849130afb8c711dec3f2ede5652dc260e4128e34a8c35fd8402`
+  are confirmed by contract events. The upheld charge was excused and settlement
+  transferred the remaining 0.005 USDC. Remaining owner/network checks are pending.
+
 Current code checkpoints:
 
 - [x] Task 1: network resolution and wagmi configuration
@@ -99,7 +161,9 @@ Current code checkpoints:
 - [x] Task 4: header network switcher implementation
 - [x] Task 5: per-chain relayer configuration and routing
 - [ ] Task 4 Step 3: connected-wallet/browser verification (deferred by user)
-- [ ] Task 6: operator funding, deployment, configuration, and mainnet end-to-end checks
+- [x] Task 6 Step 2: mainnet deployment (operator completed; receipt verified)
+- [x] Task 6 Step 5: document the verified mainnet deployment
+- [ ] Task 6: remaining wallet and mainnet end-to-end checks
 
 The step checkboxes below are the original handoff checklist and do not reconstruct
 Claude's historical red-test checkpoints. This record captures the verified final state.
@@ -1306,7 +1370,7 @@ platform deployer in the testnet constructor is not the currently configured rel
 
 Verify: `cast balance <addr> --rpc-url https://rpc.mainnet.arc.io`
 
-- [ ] **Step 2: Deploy Notch to Arc mainnet**
+- [x] **Step 2: Deploy Notch to Arc mainnet**
 
 ```bash
 forge create contracts/Notch.sol:Notch \
@@ -1354,7 +1418,7 @@ In Vercel project settings:
 
 Optionally point `mainnet.notch.bond` at the same deployment to preselect mainnet.
 
-- [ ] **Step 5: Document the deployment**
+- [x] **Step 5: Document the deployment**
 
 In `AGENTS.md`, add the mainnet row to the deployed-contracts table:
 
