@@ -57,8 +57,8 @@ Bun.serve({
 })
 
 console.log(`[relayer] Notch arbitrator relayer starting`)
-console.log(`[relayer] Arbitrator: ${arbitratorAddress() ?? '(key not configured)'}`)
-for (const cfg of Object.values(RELAYER_CHAINS)) {
+for (const [id, cfg] of Object.entries(RELAYER_CHAINS)) {
+  console.log(`[relayer] ${cfg.label} arbitrator: ${arbitratorAddress(Number(id)) ?? '(key missing or invalid)'}`)
   console.log(`[relayer] ${cfg.label}: ${cfg.contract ?? '(not configured)'} via ${cfg.rpcUrl}`)
 }
 console.log(`[relayer] Status:     http://localhost:${PORT}/health`)

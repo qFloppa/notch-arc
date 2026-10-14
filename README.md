@@ -63,6 +63,9 @@ starts with a 1 USDC bond, which the contract owner can change in the app.
 Mainnet deployment is pending, so its switcher option stays disabled until
 `VITE_NOTCH_ADDRESS_ARC` is set to a verified deployment address and the frontend
 is rebuilt. Set the same address in the relayer's `NOTCH_CONTRACT_ADDRESS_ARC`.
+Set `ARBITRATOR_PRIVATE_KEY_ARC` to the mainnet arbitrator wallet's private key;
+`ARBITRATOR_PRIVATE_KEY` continues to serve testnet. Each key's public address must
+match its network's contract arbitrator. Mainnet requires its own configured key.
 `VITE_ARC_MAINNET_RPC_URL` and `ARC_MAINNET_RPC_URL` are optional RPC overrides for
 the frontend and relayer, respectively.
 
@@ -104,7 +107,12 @@ bun install
 bun run dev           # :3001 — the Vite dev server proxies /relayer → :3001
 ```
 
-The `ARBITRATOR_PRIVATE_KEY` wallet must be the contract's `arbitrator`, or `submitRuling` reverts.
+On testnet, `ARBITRATOR_PRIVATE_KEY` must belong to the contract's `arbitrator`.
+On mainnet, use `ARBITRATOR_PRIVATE_KEY_ARC` for that contract's `arbitrator`.
+Both are server-side secrets; keep them out of `VITE_` variables and source control.
+Each wallet needs USDC gas on its network to submit rulings. After changing Vercel
+variables, redeploy. `/relayer/health` lists public arbitrator addresses and
+missing/invalid variables per chain; its legacy top-level address refers to testnet.
 The mainnet constructor's `owner` must be a wallet you can connect in the app to
 manage the bond; it may be different from the arbitrator.
 

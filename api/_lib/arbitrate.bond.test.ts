@@ -5,6 +5,7 @@ import artifact from '../../contracts/out/Notch.sol/Notch.json'
 
 process.env.GEMINI_API_KEY = 'test-only'
 process.env.ARBITRATOR_PRIVATE_KEY = `0x${'0'.repeat(63)}1`
+process.env.ARBITRATOR_PRIVATE_KEY_ARC = `0x${'0'.repeat(63)}2`
 process.env.NOTCH_CONTRACT_ADDRESS = '0x1111111111111111111111111111111111111111'
 process.env.NOTCH_CONTRACT_ADDRESS_ARC = '0x2222222222222222222222222222222222222222'
 process.env.ARC_TESTNET_RPC_URL = 'http://127.0.0.1:1'
