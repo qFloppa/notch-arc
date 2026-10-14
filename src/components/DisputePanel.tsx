@@ -129,6 +129,7 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
   // Exact approval caps the amount collected if the owner raises the bond while
   // the wallet confirmation is open. A larger old allowance must be lowered first.
   const hasBondApproval = readsReady && allowance === bondAmount
+  const needsApprovalReset = readsReady && allowance > bondAmount
   const busy = isChecking || isApproving || isApproveConfirming || isDisputing || isDisputeConfirming
 
   // Recheck immediately before signing. A higher bond after approval must return to
@@ -203,8 +204,23 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
           <>Disputes require a <span className="font-semibold" style={{ color: 'var(--danger)' }}>{formatUsdc(bondAmount)} USDC bond</span>.</>
         )}
         {' '}Upheld → you keep the bond. Rejected → bond goes to the payee. Adjusted → bond split per ruling.
-        {' '}Approval is limited to the current bond amount.
+        <p className="mt-2">
+          Approval gives Notch permission to collect the exact bond when you file; it does not add funds to your wallet.
+          {' '}Keep enough USDC for the bond and gas fees.
+        </p>
       </div>
+
+      {!notch.isTestnet && (
+        <div role="note" aria-label="Rabby wallet tip" className="rounded-lg p-3 text-xs" style={{ background: 'var(--warning-dim)', color: 'var(--ink-2)', lineHeight: '1.5' }}>
+          <p className="font-semibold" style={{ color: 'var(--warning)' }}>Using Rabby with a low balance?</p>
+          <p className="mt-1">
+            Rabby may show “transfer amount exceeds balance” even when your balance covers the bond.
+            {' '}Keep about 1 USDC extra above the bond, or try MetaMask. This is a wallet simulation buffer;
+            only the bond and actual gas fees are charged. The buffer needed can change with gas fees.
+            {' '}Approving more USDC will not fix this error.
+          </p>
+        </div>
+      )}
 
       {/* Item selector + what's being disputed */}
       <div>
@@ -281,6 +297,12 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
 
       {/* Actions */}
       <div className="space-y-2">
+        {needsApprovalReset && (
+          <p role="status" className="text-xs" style={{ color: 'var(--ink-2)', lineHeight: '1.5' }}>
+            Your current approval is {formatUsdc(allowance)} USDC. Use the button below to reset it to the exact
+            {' '}{formatUsdc(bondAmount)} USDC bond, so a bond increase cannot collect more than you reviewed.
+          </p>
+        )}
         {(bondError || allowanceError) && (
           <p role="alert" className="text-xs" style={{ color: 'var(--danger)' }}>
             Could not load the current bond and USDC allowance.{' '}
@@ -303,7 +325,7 @@ export default function DisputePanel({ statementId, itemIds, onDisputed }: Props
             className="w-full py-2.5 rounded-lg font-semibold text-sm disabled:opacity-40"
             style={{ background: 'var(--surface-3)', color: 'var(--ink)', border: '1px solid var(--border-2)' }}
           >
-            {isChecking ? 'Checking bond…' : isApproving ? 'Confirm in wallet…' : isApproveConfirming ? 'Approving…' : bondAmount === undefined ? 'Waiting for bond amount…' : `Step 1 — Approve ${formatUsdc(bondAmount)} USDC Bond`}
+            {isChecking ? 'Checking bond…' : isApproving ? 'Confirm in wallet…' : isApproveConfirming ? 'Approving…' : bondAmount === undefined ? 'Waiting for bond amount…' : needsApprovalReset ? `Set Approval to ${formatUsdc(bondAmount)} USDC` : `Step 1 — Approve ${formatUsdc(bondAmount)} USDC Bond`}
           </button>
         )}
 

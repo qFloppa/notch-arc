@@ -116,11 +116,13 @@ effective reservation of 0.6 USDC at a simulated gas price of 20 gwei, consisten
 with a 30-million-gas budget. Supplying a smaller gas limit did not fix the service's
 result. Arc uses the same USDC balance for ERC-20 transfers and native gas.
 
-Keeping over 1 USDC is a practical Rabby workaround at current fees; the required
-buffer depends on the bond and simulated gas price. Alternatively, test with
+Keeping about 1 USDC extra above the bond is a practical Rabby workaround at
+current fees; the required buffer depends on simulated gas prices. Alternatively, test with
 another wallet such as MetaMask. The successful 0.1 USDC dispute's actual gas fee
 was about 0.0096 USDC. There is no 1 USDC contract balance minimum, and increasing
 the approved amount does not fix this simulation issue.
+The mainnet dispute form shows this tip before filing and explains when a larger
+approval needs resetting to the exact bond amount.
 
 ## Running locally
 

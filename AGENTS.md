@@ -69,6 +69,8 @@ it effectively reserved 0.6 USDC before checking an ERC-20 transfer, despite a m
 smaller supplied gas limit. Arc RPC accepted the same transfer. Keep over 1 USDC
 as a practical workaround at current fees or test another wallet; this is not a
 contract minimum. Details and verification are in the deployment plan and README.
+The mainnet dispute form shows this Rabby tip before filing, explains that approval
+does not add funds, and labels oversized-allowance resets with the exact bond amount.
 
 ## Tech Stack
 
