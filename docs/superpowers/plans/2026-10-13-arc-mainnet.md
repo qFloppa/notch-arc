@@ -120,6 +120,39 @@
 - README and AGENTS now record the verified deployment. Settlement, live dispute
   filing and ruling, and the remaining owner/network wallet checks are pending.
 
+### Rabby low-balance simulation reproduction (2026-10-14)
+
+- The user reports filing succeeds with about 4 USDC and fails after reducing the
+  balance below 1 USDC. The failing wallet is the original owner/payer
+  `0x051Cf644B01DE23EbDca61E7DdBad6bEfdAFF0Df`.
+- Read-only 0.1 USDC ERC-20 `transfer` simulations isolate the token balance path
+  without depending on an unexpired statement or allowance. Arc RPC succeeds with
+  balance 0.67497055399686843 USDC and estimates 49338 gas (0.00098676 USDC at 20 gwei).
+- Rabby's public `/v1/wallet/pre_exec_tx` returns the exact reported `-39000`
+  `ERC20: transfer amount exceeds balance` with fees included. Zero-fee simulation
+  succeeds. An explicit gas limit of 74007 does not change the failure. Test fee
+  values were used only for simulations; no transaction was signed or broadcast.
+- At 20 gwei, simulated transfers of 74969 and 74970 micro-USDC succeed while
+  74971 fails. This isolates an effective reservation of 0.6 USDC, consistent with
+  30000000 gas times 20 gwei, rather than the supplied/estimated gas limit.
+  A 0.1 USDC transfer also succeeds at 19 gwei and fails at 19.2 gwei, supporting
+  the same reservation model. Backend implementation details are not public.
+- This is a reproduced Rabby fee-simulation issue, not a Notch bond, allowance,
+  or decimal mismatch. The actual balance minimum for Rabby's simulation varies
+  with the transferred amount and fee. Keeping over 1 USDC is a practical workaround
+  at current fees, or test another wallet. A gas-cap app patch was ruled out by
+  the explicit-limit comparison; no transaction code was changed.
+- The successful mainnet dispute transaction
+  `0xc55402f4e9cc40e1e20352d2220db2d65664eb72c6de664edfe8264bea5bd3f7`
+  used 479976 gas and cost 0.009599520641727912 USDC. Its 0.1 USDC bond was awarded
+  to the claimant by upheld ruling transaction
+  `0xaac4e9220216830195f495c60362bb379e619344a6d5b9f65d1bf0f6dbc72773`.
+  Bond withdrawal `0xccfb137afc00f5dd2f188682d786ab26a7b7ede97223e84faac5b2517930e11f`
+  and statement settlement
+  `0xa905d31042e82849130afb8c711dec3f2ede5652dc260e4128e34a8c35fd8402`
+  are confirmed by contract events. The upheld charge was excused and settlement
+  transferred the remaining 0.005 USDC. Remaining owner/network checks are pending.
+
 Current code checkpoints:
 
 - [x] Task 1: network resolution and wagmi configuration

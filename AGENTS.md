@@ -58,10 +58,17 @@ constant. Choose a mainnet owner wallet that can be connected in the app.
 - Deployment transaction: 0x3f3186b60831029f1862c67bcbe5c85e1b6f7e4c30acf7fc9f9beafb65d71361
 
 The deployment receipt, constructor args, current getters, and live relayer health
-were verified through read-only requests. Mainnet dispute filing, arbitration, and
-settlement remain end-to-end checks. The app requires an allowance equal to the
+were verified through read-only requests. A mainnet 0.1 USDC dispute, upheld ruling,
+bond withdrawal, and settlement are confirmed on-chain. Remaining network and owner
+wallet checks are pending. The app requires an allowance equal to the
 current bond to cap spending if the owner changes it before filing; the contract
 itself accepts any allowance at least as large as the bond.
+
+Rabby's simulation service has a reproduced low-balance issue on Arc: at 20 gwei,
+it effectively reserved 0.6 USDC before checking an ERC-20 transfer, despite a much
+smaller supplied gas limit. Arc RPC accepted the same transfer. Keep over 1 USDC
+as a practical workaround at current fees or test another wallet; this is not a
+contract minimum. Details and verification are in the deployment plan and README.
 
 ## Tech Stack
 

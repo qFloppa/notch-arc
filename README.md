@@ -63,8 +63,9 @@ The dispute **bond** and the **bill** are independent: a won bond is credited ba
 | Bond | 0.1 USDC as verified on 2026-10-14; owner can change it |
 | Dispute window | 3600 s |
 
-The deployment and live relayer configuration are verified. Mainnet dispute
-filing, arbitration, and settlement are still being tested.
+The deployment and live relayer configuration are verified. A mainnet 0.1 USDC
+dispute, upheld ruling, bond withdrawal, and settlement are confirmed on-chain.
+The remaining network and owner wallet checks are still being tested.
 
 ## Networks
 
@@ -105,6 +106,21 @@ If you manually approve more in your wallet, the app shows the approval step aga
 to lower it to the current bond. This is an app spending cap; the contract accepts
 an allowance greater than or equal to the bond. Approval grants permission to spend
 USDC and does not add USDC to your balance.
+
+### Rabby simulation with a low USDC balance
+
+On 2026-10-14, Rabby's simulation service rejected USDC transfers from a wallet
+holding about 0.675 USDC with `ERC20: transfer amount exceeds balance #-39000`,
+while Arc RPC simulations succeeded. Fee and transfer-boundary checks showed an
+effective reservation of 0.6 USDC at a simulated gas price of 20 gwei, consistent
+with a 30-million-gas budget. Supplying a smaller gas limit did not fix the service's
+result. Arc uses the same USDC balance for ERC-20 transfers and native gas.
+
+Keeping over 1 USDC is a practical Rabby workaround at current fees; the required
+buffer depends on the bond and simulated gas price. Alternatively, test with
+another wallet such as MetaMask. The successful 0.1 USDC dispute's actual gas fee
+was about 0.0096 USDC. There is no 1 USDC contract balance minimum, and increasing
+the approved amount does not fix this simulation issue.
 
 ## Running locally
 
