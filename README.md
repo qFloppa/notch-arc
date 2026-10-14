@@ -51,6 +51,21 @@ The dispute **bond** and the **bill** are independent: a won bond is credited ba
 
 > An earlier deployment (`0xeffe…0938a`) is stale — on it a won dispute refunded the bond but didn't excuse the charge. Use the address above.
 
+## Deployed contract (Arc mainnet)
+
+| | |
+|---|---|
+| Contract | `0x385285f6161FB84eDb3C5354B0e3bB1D6b7683a3` |
+| Explorer | https://explorer.arc.io/address/0x385285f6161FB84eDb3C5354B0e3bB1D6b7683a3 |
+| Chain ID | 5042 |
+| USDC | `0x3600000000000000000000000000000000000000` (6 decimals, native gas asset) |
+| Owner and arbitrator | `0x051Cf644B01DE23EbDca61E7DdBad6bEfdAFF0Df` |
+| Bond | 0.1 USDC as verified on 2026-10-14; owner can change it |
+| Dispute window | 3600 s |
+
+The deployment and live relayer configuration are verified. Mainnet dispute
+filing, arbitration, and settlement are still being tested.
+
 ## Networks
 
 The header switcher changes the connected wallet's chain. Contract reads, writes,
@@ -58,11 +73,11 @@ receipts, explorer links, and dispute arbitration follow that network. Testnet
 (5042002) is the default; tabs are stored separately for each network and wallet.
 Existing tab IDs can be added with the dashboard's paste field on their original network.
 
-Arc mainnet (5042) uses real USDC for dispute bonds and gas. The deployment example
-starts with a 1 USDC bond, which the contract owner can change in the app.
-Mainnet deployment is pending, so its switcher option stays disabled until
-`VITE_NOTCH_ADDRESS_ARC` is set to a verified deployment address and the frontend
-is rebuilt. Set the same address in the relayer's `NOTCH_CONTRACT_ADDRESS_ARC`.
+Arc mainnet (5042) uses real USDC for dispute bonds and gas. The deployed contract
+started with a 1 USDC bond; the owner has changed it to 0.1 USDC.
+Set `VITE_NOTCH_ADDRESS_ARC` to the mainnet address above and rebuild the frontend
+to enable the mainnet switcher. Set the same address in the relayer's
+`NOTCH_CONTRACT_ADDRESS_ARC`.
 Set `ARBITRATOR_PRIVATE_KEY_ARC` to the mainnet arbitrator wallet's private key;
 `ARBITRATOR_PRIVATE_KEY` continues to serve testnet. Each key's public address must
 match its network's contract arbitrator. Mainnet requires its own configured key.
@@ -76,7 +91,7 @@ for funding, deployment, and verification steps.
 
 ### Mainnet bond settings
 
-Once mainnet is deployed and configured, switch to Arc mainnet and connect the
+With mainnet configured, switch to Arc mainnet and connect the
 contract owner's wallet. Open **Arbitrator → Mainnet dispute bond**, enter a positive
 USDC amount with up to six decimal places, and confirm **Update bond amount** in
 your wallet. The control uses the contract's existing owner-only `setBondAmount`.
@@ -86,6 +101,10 @@ Gemini relayer uses when awarding it. The dispute form reads the current bond fr
 the active network and rechecks it and your allowance before requesting a signature.
 Approval is set to the exact bond, including lowering an older allowance, so a
 bond increase while your wallet confirmation is open cannot collect extra USDC.
+If you manually approve more in your wallet, the app shows the approval step again
+to lower it to the current bond. This is an app spending cap; the contract accepts
+an allowance greater than or equal to the bond. Approval grants permission to spend
+USDC and does not add USDC to your balance.
 
 ## Running locally
 

@@ -11,10 +11,10 @@ This is the **project memory** - what Arc Studio remembers about building this a
 Notch is a USDC clearing layer for agent micropayments supporting Arc Testnet and Arc mainnet. Agents open shared tabs, record hash-committed charges, close billing cycles into netted statements, and raise bonded disputes. Disputes are resolved by a Gemini-powered off-chain arbitrator relayer that fetches evidence, calls the Gemini API, and submits a ruling on-chain.
 
 Testnet is the default. The header switcher follows the connected wallet's chain;
-tabs and relayer dispute state are scoped to each network. Arc mainnet deployment
-is pending, and the mainnet switcher option is disabled until `VITE_NOTCH_ADDRESS_ARC`
-is configured. Set the matching relayer `NOTCH_CONTRACT_ADDRESS_ARC` after verifying
-the deployment. The funding and deployment runbook is in
+tabs and relayer dispute state are scoped to each network. Arc mainnet is deployed
+at `0x385285f6161FB84eDb3C5354B0e3bB1D6b7683a3`. The mainnet switcher option is enabled
+when `VITE_NOTCH_ADDRESS_ARC` is configured. Set the same address in the relayer's
+`NOTCH_CONTRACT_ADDRESS_ARC`. The funding and deployment runbook is in
 `docs/superpowers/plans/2026-10-13-arc-mainnet.md`, Task 6.
 
 Relayer wallets are configured separately: `ARBITRATOR_PRIVATE_KEY` for testnet,
@@ -36,16 +36,32 @@ constant. Choose a mainnet owner wallet that can be connected in the app.
 
 | Contract | Network | Address | Explorer |
 |---|---|---|---|
+| Notch (current) | Arc mainnet | 0x385285f6161FB84eDb3C5354B0e3bB1D6b7683a3 | https://explorer.arc.io/address/0x385285f6161FB84eDb3C5354B0e3bB1D6b7683a3 |
 | Notch (current) | Arc Testnet | 0x53F07375799558592Ea90344d14495D007C30f97 | https://explorer.testnet.arc.io/address/0x53F07375799558592Ea90344d14495D007C30f97 |
 | Notch (stale — upheld disputes didn't excuse the charge) | Arc Testnet | 0xeffe19557a9cac8bf25ef6d3f072481d46a0938a | https://explorer.testnet.arc.io/address/0xeffe19557a9cac8bf25ef6d3f072481d46a0938a |
 | Notch (old, stale — missing getters) | Arc Testnet | 0x7c7cc8322ba3db93381823a9161e47a85d490fc8 | https://explorer.testnet.arc.io/address/0x7c7cc8322ba3db93381823a9161e47a85d490fc8 |
 
-### Constructor args used
+### Arc Testnet constructor args used
 - USDC: 0x3600000000000000000000000000000000000000 (Arc Testnet native USDC)
 - Arbitrator: 0x5B12Ce46C7194aD57d143bC22847224047b1Ef42 (platform deployer — replace with relayer wallet for production)
 - Owner: 0x5B12Ce46C7194aD57d143bC22847224047b1Ef42
 - Bond amount: 1_000_000 (1 USDC, 6 decimals)
 - Dispute window: 3600 seconds
+
+### Arc mainnet constructor args used
+
+- USDC: 0x3600000000000000000000000000000000000000
+- Arbitrator: 0x051Cf644B01DE23EbDca61E7DdBad6bEfdAFF0Df
+- Owner: 0x051Cf644B01DE23EbDca61E7DdBad6bEfdAFF0Df
+- Initial bond amount: 1_000_000 (1 USDC); current bond verified on 2026-10-14: 100_000 (0.1 USDC)
+- Dispute window: 3600 seconds
+- Deployment transaction: 0x3f3186b60831029f1862c67bcbe5c85e1b6f7e4c30acf7fc9f9beafb65d71361
+
+The deployment receipt, constructor args, current getters, and live relayer health
+were verified through read-only requests. Mainnet dispute filing, arbitration, and
+settlement remain end-to-end checks. The app requires an allowance equal to the
+current bond to cap spending if the owner changes it before filing; the contract
+itself accepts any allowance at least as large as the bond.
 
 ## Tech Stack
 
