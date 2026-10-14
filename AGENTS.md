@@ -17,6 +17,14 @@ is configured. Set the matching relayer `NOTCH_CONTRACT_ADDRESS_ARC` after verif
 the deployment. The funding and deployment runbook is in
 `docs/superpowers/plans/2026-10-13-arc-mainnet.md`, Task 6.
 
+Relayer wallets are configured separately: `ARBITRATOR_PRIVATE_KEY` for testnet,
+`ARBITRATOR_PRIVATE_KEY_ARC` for mainnet. Each key's public address must match its
+chain's contract arbitrator and have USDC gas there. Mainnet never falls back to
+the testnet key. Keys stay server-side without a `VITE_` prefix. Health reports
+public addresses and missing/invalid variables per chain; its legacy top-level
+`arbitrator` field refers to testnet. The previously verified local relayer address
+belongs to the testnet configuration and does not determine the mainnet arbitrator.
+
 Mainnet has an owner-only bond editor in the Arbitrator view. It uses the existing
 `setBondAmount(uint256)` function and accepts positive USDC amounts with up to six
 decimal places. Changes apply to new disputes; existing disputes keep their recorded

@@ -71,6 +71,26 @@
 - Reviewer found no remaining material issues after verifying exact-allowance
   handling and visible wagmi receipt/write errors; the follow-up is ready to commit.
 
+### Separate arbitrator wallets follow-up
+
+- The user chose a different mainnet arbitrator wallet. Testnet retains
+  `ARBITRATOR_PRIVATE_KEY`; mainnet requires `ARBITRATOR_PRIVATE_KEY_ARC` with no
+  fallback. Each cached wallet client uses its chain's key. Missing or malformed
+  keys are rejected before RPC/Gemini calls, with variable names and no secret input.
+- Health and local startup list public arbitrator addresses per chain; the legacy
+  top-level health address remains testnet. App relayer setup, env examples, spec,
+  and deployment instructions describe the separate keys. Existing local secrets
+  and remote Vercel variables were not changed.
+- `bun api/_lib/arbitrate.wallets.test.ts` passes for distinct fixture keys,
+  alternating cached clients, missing mainnet/testnet keys, and malformed mainnet
+  key handling. It exercises the real wallet client's sender selection through a
+  mocked transport and stops before signing or broadcasting. The relayer chain,
+  stored-bond, HTTP route, config, and Gemini retry checks also pass.
+- Final production build, scoped `src`/`api` TypeScript check, frontend type-aware
+  lint, repository lint, and whitespace check pass. Review found no material issues.
+  Live signing and contract-arbitrator matching remain deployment verification;
+  browser/wallet checks are still deferred by the user.
+
 Current code checkpoints:
 
 - [x] Task 1: network resolution and wagmi configuration
@@ -89,6 +109,7 @@ Claude's historical red-test checkpoints. This record captures the verified fina
 - Chain IDs: Arc Testnet `5042002` (`arcTestnet` from `viem/chains`), Arc mainnet `5042` (`arc` from `viem/chains`). Never hardcode the numbers where the viem export is available.
 - **Naming hazard:** `mainnet` imported in `src/config.ts` is **Ethereum** (chain 1), present only for ENS resolution. Arc mainnet is `arc`. No identifier may use a bare "mainnet" to mean Arc — use `ARC_MAINNET_ID` / `arc`.
 - USDC is at `0x3600000000000000000000000000000000000000` with `decimals() = 6` on **both** Arc networks. `USDC_ADDRESS` stays a single constant.
+- **Updated by user request:** arbitrate with `ARBITRATOR_PRIVATE_KEY` on testnet and `ARBITRATOR_PRIVATE_KEY_ARC` on mainnet. No fallback between keys. Each wallet must match its own contract's arbitrator and be funded for gas on that chain.
 - **Updated by user request on 2026-10-14:** the mainnet bond is editable by the contract owner in the app. Read `bondAmount()` from the active contract for dispute approvals; arbitration uses the bond stored on each dispute. No fixed frontend bond constant or per-network bond map. The deployment example starts at 1 USDC.
 - Testnet is the default network everywhere except the `mainnet.` hostname.
 - Tests use no framework: `node:assert` + a `bun <file>` entry point, matching `api/_lib/gemini.retry.test.ts`.
@@ -900,6 +921,7 @@ export interface RelayerChain {
   label: string
   /** Name of the env var that supplies `contract`, for error messages. */
   contractEnvVar: string
+  arbitratorKeyEnvVar: 'ARBITRATOR_PRIVATE_KEY' | 'ARBITRATOR_PRIVATE_KEY_ARC'
 }
 
 export const RELAYER_CHAINS: Record<number, RelayerChain> = {
@@ -910,6 +932,7 @@ export const RELAYER_CHAINS: Record<number, RelayerChain> = {
       process.env.NOTCH_CONTRACT_ADDRESS) as `0x${string}` | undefined,
     label: 'Arc Testnet',
     contractEnvVar: 'NOTCH_CONTRACT_ADDRESS',
+    arbitratorKeyEnvVar: 'ARBITRATOR_PRIVATE_KEY',
   },
   [ARC_MAINNET_ID]: {
     chain: arc,
@@ -918,6 +941,7 @@ export const RELAYER_CHAINS: Record<number, RelayerChain> = {
     contract: process.env.NOTCH_CONTRACT_ADDRESS_ARC as `0x${string}` | undefined,
     label: 'Arc',
     contractEnvVar: 'NOTCH_CONTRACT_ADDRESS_ARC',
+    arbitratorKeyEnvVar: 'ARBITRATOR_PRIVATE_KEY_ARC',
   },
 }
 
@@ -956,10 +980,21 @@ Replace the imports and config block (lines 12-53) with:
 import { createPublicClient, createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { judgeDispute, fetchEvidence } from './gemini.js'
-import { RELAYER_CHAINS, ARC_TESTNET_ID, ARC_MAINNET_ID } from './chains.js'
+import { RELAYER_CHAINS, DEFAULT_RELAYER_CHAIN_ID } from './chains.js'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const ARBITRATOR_PRIVATE_KEY = process.env.ARBITRATOR_PRIVATE_KEY
+const ARBITRATOR_KEYS: Partial<Record<number, string>> = Object.fromEntries(
+  Object.entries(RELAYER_CHAINS).map(([id, cfg]) => [id, process.env[cfg.arbitratorKeyEnvVar]] as const)
+)
+
+function arbitratorAccount(chainId: number) {
+  try {
+    const key = ARBITRATOR_KEYS[chainId]
+    return key ? privateKeyToAccount(key as `0x${string}`) : null
+  } catch {
+    return null // Report only the variable name, never a key parser's input.
+  }
+}
 
 // Deliberately NOT thrown at module load. A serverless runtime reports a module-load
 // throw as a bare FUNCTION_INVOCATION_FAILED 500 with no message, which makes a missing
@@ -967,10 +1002,15 @@ const ARBITRATOR_PRIVATE_KEY = process.env.ARBITRATOR_PRIVATE_KEY
 function missingConfig(chainId: number): string[] {
   const missing: string[] = []
   if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY')
-  if (!ARBITRATOR_PRIVATE_KEY) missing.push('ARBITRATOR_PRIVATE_KEY')
   const cfg = RELAYER_CHAINS[chainId]
+  if (cfg && !ARBITRATOR_KEYS[chainId]) missing.push(cfg.arbitratorKeyEnvVar)
   if (!cfg?.contract) missing.push(cfg?.contractEnvVar ?? 'NOTCH_CONTRACT_ADDRESS')
   return missing
+}
+
+function invalidConfig(chainId: number): string[] {
+  const cfg = RELAYER_CHAINS[chainId]
+  return cfg && ARBITRATOR_KEYS[chainId] && !arbitratorAccount(chainId) ? [cfg.arbitratorKeyEnvVar] : []
 }
 ```
 
@@ -985,7 +1025,8 @@ Replace `buildClients`/`clients` (lines 117-133) with a per-chain cache:
 
 function buildClients(chainId: number) {
   const { chain, rpcUrl } = RELAYER_CHAINS[chainId]
-  const account = privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`)
+  const account = arbitratorAccount(chainId)
+  if (!account) throw new Error(`invalid env: ${RELAYER_CHAINS[chainId].arbitratorKeyEnvVar}`)
   return {
     account,
     publicClient: createPublicClient({ chain, transport: http(rpcUrl) }),
@@ -1004,12 +1045,8 @@ function clients(chainId: number) {
 }
 
 /** Arbitrator address, or null if the key isn't configured — never throws. */
-export function arbitratorAddress(): string | null {
-  try {
-    return privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`).address
-  } catch {
-    return null
-  }
+export function arbitratorAddress(chainId: number = DEFAULT_RELAYER_CHAIN_ID): string | null {
+  return arbitratorAccount(chainId)?.address ?? null
 }
 ```
 
@@ -1022,10 +1059,12 @@ export function health() {
     label: cfg.label,
     contract: cfg.contract ?? null,
     rpc: cfg.rpcUrl,
+    arbitrator: arbitratorAddress(Number(id)),
     missingEnv: missingConfig(Number(id)),
+    invalidEnv: invalidConfig(Number(id)),
   }))
   return {
-    status: chains.some(c => c.missingEnv.length === 0) ? 'ok' : 'misconfigured',
+    status: chains.some(c => c.missingEnv.length === 0 && c.invalidEnv.length === 0) ? 'ok' : 'misconfigured',
     arbitrator: arbitratorAddress(),
     chains,
     processedThisInstance: processedDisputes.size,
@@ -1041,9 +1080,15 @@ export async function processDispute(
   disputeId: `0x${string}`,
   chainId: number,
 ): Promise<ProcessResult> {
+  const cfg = RELAYER_CHAINS[chainId]
+  if (!cfg) return { ok: false, error: `unsupported chainId: ${chainId}` }
   const missing = missingConfig(chainId)
   if (missing.length > 0) {
     return { ok: false, error: `relayer not configured for ${RELAYER_CHAINS[chainId].label} — missing env: ${missing.join(', ')}` }
+  }
+  const invalid = invalidConfig(chainId)
+  if (invalid.length > 0) {
+    return { ok: false, error: `relayer not configured for ${cfg.label} — invalid env: ${invalid.join(', ')}` }
   }
   // REVIEW FOCUS 4: the same disputeId can exist on both networks and mean two
   // different disputes, so every piece of dedupe state is keyed by chain too.
@@ -1108,8 +1153,8 @@ import { RELAYER_CHAINS } from '../api/_lib/chains.js'
 
 // ... at the bottom:
 console.log(`[relayer] Notch arbitrator relayer starting`)
-console.log(`[relayer] Arbitrator: ${arbitratorAddress() ?? '(key not configured)'}`)
-for (const cfg of Object.values(RELAYER_CHAINS)) {
+for (const [id, cfg] of Object.entries(RELAYER_CHAINS)) {
+  console.log(`[relayer] ${cfg.label} arbitrator: ${arbitratorAddress(Number(id)) ?? '(key missing or invalid)'}`)
   console.log(`[relayer] ${cfg.label}: ${cfg.contract ?? '(not configured)'} via ${cfg.rpcUrl}`)
 }
 console.log(`[relayer] Status:     http://localhost:${PORT}/health`)
@@ -1162,6 +1207,9 @@ Append to `relayer/env.example`:
 # relayer then rejects mainnet disputes with a named config error rather than a 500.
 NOTCH_CONTRACT_ADDRESS_ARC=
 
+# Mainnet arbitrator secret, server-side only. No fallback to ARBITRATOR_PRIVATE_KEY.
+ARBITRATOR_PRIVATE_KEY_ARC=
+
 # Arc mainnet RPC. Optional: the viem defaults answer unauthenticated, unlike testnet.
 ARC_MAINNET_RPC_URL=https://rpc.mainnet.arc.io
 ```
@@ -1190,7 +1238,9 @@ Expected: all pass, exit 0.
 - [ ] **Step 10: Verify the relayer reports both chains**
 
 Run `cd relayer && bun run dev` (or `bun server.ts`), then `curl -s localhost:3001/health | head -40`.
-Expected: a `chains` array with two entries. Arc Testnet has a contract and empty `missingEnv`; Arc has `contract: null` and `missingEnv: ["NOTCH_CONTRACT_ADDRESS_ARC"]`. Stop the server.
+Expected: a `chains` array with public arbitrator addresses per network. Configured
+testnet has empty `missingEnv`/`invalidEnv`; unconfigured mainnet lists
+`NOTCH_CONTRACT_ADDRESS_ARC` and `ARBITRATOR_PRIVATE_KEY_ARC` as missing. Stop the server.
 
 - [ ] **Step 11: Verify a mainnet push is rejected cleanly, not with a 500**
 
@@ -1241,13 +1291,15 @@ Arc's native gas currency is USDC at 18 decimals; the ERC-20 at
 `0x3600000000000000000000000000000000000000` is 6 decimals. Fund:
 
 - the **deployer** — enough for one contract creation;
-- the **arbitrator** (the wallet behind `ARBITRATOR_PRIVATE_KEY`; the locally
-  configured public address verified on 2026-10-14 is
-  `0xE849DDC0fa5b31b7aAEB4a9186DB96A144Cf9Cf2`) — enough for ongoing `submitRuling`
+- the **mainnet arbitrator** (the wallet behind `ARBITRATOR_PRIVATE_KEY_ARC`) —
+  enough for ongoing `submitRuling`
   transactions. Easy to forget, and without it a mainnet dispute sits `Pending`
   with no visible error.
 
-The deployer and arbitrator may be the same wallet. Choose `OWNER_ADDRESS` as a
+The previously verified local `ARBITRATOR_PRIVATE_KEY` address
+`0xE849DDC0fa5b31b7aAEB4a9186DB96A144Cf9Cf2` belongs to the testnet relayer;
+use your chosen mainnet arbitrator's address for the mainnet constructor.
+The deployer and mainnet arbitrator may be the same wallet. Choose `OWNER_ADDRESS` as a
 wallet you can connect in the app; it needs USDC gas for bond updates. Recheck the
 arbitrator address against the actual relayer key before deployment. The old
 platform deployer in the testnet constructor is not the currently configured relayer.
@@ -1268,7 +1320,8 @@ forge create contracts/Notch.sol:Notch \
     3600
 ```
 
-Set `ARBITRATOR_ADDRESS` to the public address of the relayer wallet and
+Set `ARBITRATOR_ADDRESS` to the public address of the mainnet relayer wallet
+(`ARBITRATOR_PRIVATE_KEY_ARC`) and
 `OWNER_ADDRESS` to the wallet that will manage bond settings. Args in order: USDC,
 arbitrator, owner, initial bond amount (the example uses 1 USDC at 6 decimals),
 dispute window in seconds. The owner can change the bond later in the app.
@@ -1294,6 +1347,10 @@ means the relayer can never submit a ruling.
 In Vercel project settings:
 - `VITE_NOTCH_ADDRESS_ARC` = the deployed address (build-time, frontend — triggers a rebuild)
 - `NOTCH_CONTRACT_ADDRESS_ARC` = the same address (runtime, relayer function)
+- `ARBITRATOR_PRIVATE_KEY_ARC` = the private key of the mainnet contract's arbitrator
+  (runtime server-side secret, no `VITE_` prefix). Keep `ARBITRATOR_PRIVATE_KEY`
+  configured for testnet. Redeploy and confirm `/relayer/health` shows the correct
+  public arbitrator address in each chain entry.
 
 Optionally point `mainnet.notch.bond` at the same deployment to preselect mainnet.
 

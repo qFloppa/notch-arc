@@ -4,6 +4,7 @@ import { arc, arcTestnet } from 'viem/chains'
 
 delete process.env.GEMINI_API_KEY
 delete process.env.ARBITRATOR_PRIVATE_KEY
+delete process.env.ARBITRATOR_PRIVATE_KEY_ARC
 delete process.env.NOTCH_CONTRACT_ADDRESS
 delete process.env.NOTCH_CONTRACT_ADDRESS_ARC
 delete process.env.VITE_NOTCH_CONTRACT_ADDRESS
@@ -29,6 +30,7 @@ for (const chainId of [arc.id, String(arc.id)]) {
   const mainnet = await request(JSON.stringify({ disputeId, chainId }))
   assert.equal(mainnet.code, 502)
   assert.match(mainnet.body.error ?? '', /not configured for Arc .*NOTCH_CONTRACT_ADDRESS_ARC/)
+  assert.match(mainnet.body.error ?? '', /ARBITRATOR_PRIVATE_KEY_ARC/)
 }
 assert.equal((await request({ disputeId, chainId: arcTestnet.id })).code, 502)
 assert.deepEqual(await request({ disputeId, chainId: 1 }), { code: 400, body: { error: 'unsupported chainId: 1' } })

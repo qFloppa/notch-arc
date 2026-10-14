@@ -14,7 +14,7 @@ Stated by the user:
 - Mainnet showcase, small real amounts — not a third-party production launch.
 - Both networks live at once, selected by an **in-app network switcher**.
 - **Testnet is the switcher default.**
-- A single arbitrator wallet signs rulings on both networks.
+- Updated by user request: separate arbitrator wallets sign rulings on each network.
 - A `mainnet.` subdomain was floated as a possibility.
 
 Assumptions made here, not stated by the user:
@@ -205,9 +205,11 @@ single contract address (lines 21-24) and RPC URL (lines 41-51).
 - `missingConfig()` reports per-network, so a mainnet dispute arriving without
   mainnet config returns a named error rather than a bare 500.
 
-New env vars: `NOTCH_CONTRACT_ADDRESS_ARC`, and optional `ARC_MAINNET_RPC_URL`.
-Existing testnet vars keep working. One `ARBITRATOR_PRIVATE_KEY` signs both, as
-chosen.
+New env vars: `NOTCH_CONTRACT_ADDRESS_ARC`, `ARBITRATOR_PRIVATE_KEY_ARC`, and
+optional `ARC_MAINNET_RPC_URL`. Existing testnet variables keep working:
+`ARBITRATOR_PRIVATE_KEY` signs testnet, and `ARBITRATOR_PRIVATE_KEY_ARC` signs mainnet.
+There is no fallback between keys. Missing or malformed keys produce named
+configuration errors before arbitration; health lists public addresses per chain.
 
 The in-flight dedupe set at `src/notch-contract.ts:54` is keyed by disputeId
 alone. DisputeIds are per-contract and will not collide across networks in
@@ -236,9 +238,9 @@ Ordered, because the deployer is currently unfunded:
 
 **CREATE2 is deliberately skipped.** `contracts/script/DeployCreate2.s.sol` and
 `Create2Factory.sol` exist and could yield one shared address across both
-chains — all five constructor args happen to be identical, since USDC sits at
-the same address and the arbitrator and owner are the same wallet. But that
-only works if testnet is *also* redeployed through the factory, and the live
+chains if constructor arguments and bytecode were identical. Separate arbitrator
+wallets now make those arguments differ. It would also require testnet to be
+redeployed through the factory, and the live
 `0x53F0…` was not. Redeploying testnet would discard existing demo state to
 save one map entry.
 
@@ -283,7 +285,6 @@ Manual verification, in order:
 ## Non-goals
 
 - Cross-chain tabs, cross-chain netting, CCTP, or any bridging.
-- Per-network arbitrator keys (one wallet, as chosen).
 - A CREATE2 shared contract address.
 - Migration of existing `localStorage` tab registries.
 - A separate mainnet build or second Vercel project.

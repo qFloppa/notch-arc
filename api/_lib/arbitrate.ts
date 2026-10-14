@@ -12,12 +12,25 @@
 import { createPublicClient, createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { judgeDispute, fetchEvidence } from './gemini.js'
-import { RELAYER_CHAINS } from './chains.js'
+import { RELAYER_CHAINS, DEFAULT_RELAYER_CHAIN_ID } from './chains.js'
 
 // ---- Config ----------------------------------------------------------------
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const ARBITRATOR_PRIVATE_KEY = process.env.ARBITRATOR_PRIVATE_KEY
+// Server-only keys, selected per chain with no fallback between wallets.
+const ARBITRATOR_KEYS: Partial<Record<number, string>> = Object.fromEntries(
+  Object.entries(RELAYER_CHAINS).map(([id, cfg]) => [id, process.env[cfg.arbitratorKeyEnvVar]] as const)
+)
+
+function arbitratorAccount(chainId: number) {
+  try {
+    const key = ARBITRATOR_KEYS[chainId]
+    return key ? privateKeyToAccount(key as `0x${string}`) : null
+  } catch {
+    // Key parser errors can contain the input. Report only the env-var name.
+    return null
+  }
+}
 
 // Deliberately NOT thrown at module load. A serverless runtime reports a module-load
 // throw as a bare FUNCTION_INVOCATION_FAILED 500 with no message, which makes a missing
@@ -25,12 +38,16 @@ const ARBITRATOR_PRIVATE_KEY = process.env.ARBITRATOR_PRIVATE_KEY
 function missingConfig(chainId: number): string[] {
   const missing: string[] = []
   if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY')
-  if (!ARBITRATOR_PRIVATE_KEY) missing.push('ARBITRATOR_PRIVATE_KEY')
   const cfg = RELAYER_CHAINS[chainId]
+  if (cfg && !ARBITRATOR_KEYS[chainId]) missing.push(cfg.arbitratorKeyEnvVar)
   if (!cfg?.contract) missing.push(cfg?.contractEnvVar ?? 'NOTCH_CONTRACT_ADDRESS')
   return missing
 }
 
+function invalidConfig(chainId: number): string[] {
+  const cfg = RELAYER_CHAINS[chainId]
+  return cfg && ARBITRATOR_KEYS[chainId] && !arbitratorAccount(chainId) ? [cfg.arbitratorKeyEnvVar] : []
+}
 
 // ---- Contract ABI (minimal) ------------------------------------------------
 
@@ -96,7 +113,8 @@ const SUBMIT_RULING_ABI = [{
 
 function buildClients(chainId: number) {
   const { chain, rpcUrl } = RELAYER_CHAINS[chainId]
-  const account = privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`)
+  const account = arbitratorAccount(chainId)
+  if (!account) throw new Error(`invalid env: ${RELAYER_CHAINS[chainId].arbitratorKeyEnvVar}`)
   return {
     account,
     publicClient: createPublicClient({ chain, transport: http(rpcUrl) }),
@@ -115,12 +133,8 @@ function clients(chainId: number) {
 }
 
 /** Arbitrator address, or null if the key isn't configured — never throws. */
-export function arbitratorAddress(): string | null {
-  try {
-    return privateKeyToAccount(ARBITRATOR_PRIVATE_KEY as `0x${string}`).address
-  } catch {
-    return null
-  }
+export function arbitratorAddress(chainId: number = DEFAULT_RELAYER_CHAIN_ID): string | null {
+  return arbitratorAccount(chainId)?.address ?? null
 }
 
 // ---- State -----------------------------------------------------------------
@@ -139,10 +153,13 @@ export function health() {
     label: cfg.label,
     contract: cfg.contract ?? null,
     rpc: cfg.rpcUrl,
+    arbitrator: arbitratorAddress(Number(id)),
     missingEnv: missingConfig(Number(id)),
+    invalidEnv: invalidConfig(Number(id)),
   }))
   return {
-    status: chains.some(c => c.missingEnv.length === 0) ? 'ok' : 'misconfigured',
+    status: chains.some(c => c.missingEnv.length === 0 && c.invalidEnv.length === 0) ? 'ok' : 'misconfigured',
+    // Retain the legacy testnet field; chains[].arbitrator is authoritative per chain.
     arbitrator: arbitratorAddress(),
     chains,
     processedThisInstance: processedDisputes.size,
@@ -163,6 +180,10 @@ export async function processDispute(disputeId: `0x${string}`, chainId: number):
   const missing = missingConfig(chainId)
   if (missing.length > 0) {
     return { ok: false, error: `relayer not configured for ${cfg.label} — missing env: ${missing.join(', ')}` }
+  }
+  const invalid = invalidConfig(chainId)
+  if (invalid.length > 0) {
+    return { ok: false, error: `relayer not configured for ${cfg.label} — invalid env: ${invalid.join(', ')}` }
   }
   const key = `${chainId}:${disputeId}`
   if (processedDisputes.has(key)) return { ok: true, skipped: 'already processed' }

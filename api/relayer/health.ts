@@ -1,9 +1,10 @@
 /**
  * GET /api/relayer/health  (also /relayer/health via vercel.json rewrite)
  *
- * Confirms the function's env vars landed: `arbitrator` here must equal the contract's
- * `arbitrator`, or every ruling reverts. If env is missing, status is "misconfigured"
- * and missingEnv lists what to set — a readable 200, not an opaque 500.
+ * Confirms env vars landed: each chains[].arbitrator must equal that chain's contract
+ * arbitrator. Per-chain missingEnv/invalidEnv identify configuration issues; global
+ * status is "ok" when at least one chain is configured. Legacy top-level arbitrator
+ * remains the testnet address. A readable 200, not an opaque 500.
  */
 
 import { health } from '../_lib/arbitrate.js'

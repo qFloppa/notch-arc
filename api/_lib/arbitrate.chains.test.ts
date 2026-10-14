@@ -4,6 +4,7 @@ import assert from 'node:assert'
 // Override any local .env before loading the relayer. This key is a public test fixture.
 process.env.GEMINI_API_KEY = 'test-only'
 process.env.ARBITRATOR_PRIVATE_KEY = `0x${'0'.repeat(63)}1`
+process.env.ARBITRATOR_PRIVATE_KEY_ARC = `0x${'0'.repeat(63)}2`
 process.env.NOTCH_CONTRACT_ADDRESS = '0x1111111111111111111111111111111111111111'
 process.env.ARC_TESTNET_RPC_URL = 'http://127.0.0.1:1'
 process.env.ARC_MAINNET_RPC_URL = 'http://127.0.0.1:1'

@@ -25,6 +25,7 @@ export interface RelayerChain {
   contract?: `0x${string}`
   label: string
   contractEnvVar: string
+  arbitratorKeyEnvVar: 'ARBITRATOR_PRIVATE_KEY' | 'ARBITRATOR_PRIVATE_KEY_ARC'
 }
 
 export const RELAYER_CHAINS: Record<number, RelayerChain> = {
@@ -35,6 +36,7 @@ export const RELAYER_CHAINS: Record<number, RelayerChain> = {
     contract: (process.env.NOTCH_CONTRACT_ADDRESS || process.env.VITE_NOTCH_CONTRACT_ADDRESS) as `0x${string}` | undefined,
     label: 'Arc Testnet',
     contractEnvVar: 'NOTCH_CONTRACT_ADDRESS',
+    arbitratorKeyEnvVar: 'ARBITRATOR_PRIVATE_KEY',
   },
   [ARC_MAINNET_ID]: {
     chain: arc,
@@ -42,6 +44,7 @@ export const RELAYER_CHAINS: Record<number, RelayerChain> = {
     contract: (process.env.NOTCH_CONTRACT_ADDRESS_ARC || undefined) as `0x${string}` | undefined,
     label: 'Arc',
     contractEnvVar: 'NOTCH_CONTRACT_ADDRESS_ARC',
+    arbitratorKeyEnvVar: 'ARBITRATOR_PRIVATE_KEY_ARC',
   },
 }
 
